@@ -7,15 +7,15 @@
 
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 @main
 struct nudgeApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+    let notificationDelegate = NotificationDelegate()
 
+    var sharedModelContainer: ModelContainer = {
+        let schema = Schema([Entry.self])
+        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
@@ -23,10 +23,41 @@ struct nudgeApp: App {
         }
     }()
 
+    init() {
+        UNUserNotificationCenter.current().delegate = notificationDelegate
+        Task {
+            await NotificationService.requestPermission()
+            NotificationService.scheduleAll()
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
         .modelContainer(sharedModelContainer)
+    }
+}
+
+// MARK: - Notification Delegate
+
+final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    // Show notification banners even when app is in foreground
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .sound]
+    }
+
+    // Route to correct screen on notification tap
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let type = response.notification.request.content.userInfo["type"] as? String ?? ""
+        await MainActor.run {
+            NotificationCenter.default.post(name: .nudgeLaunchType, object: type)
+        }
     }
 }

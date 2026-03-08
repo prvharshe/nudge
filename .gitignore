@@ -1,0 +1,25 @@
+# ── iOS / Xcode ──────────────────────────────────────────────
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Xcode Breakpoints & personal settings (keep scheme files)
+nudge.xcodeproj/xcuserdata/
+
+# SPM
+.swiftpm/
+
+# ── Node.js backend ───────────────────────────────────────────
+nudge-backend/node_modules/
+nudge-backend/.env
+
+# ── Claude / AI tooling ───────────────────────────────────────
+.claude/
+
+# ── macOS ─────────────────────────────────────────────────────
+.DS_Store
+**/.DS_Store
