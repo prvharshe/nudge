@@ -107,6 +107,9 @@ struct FollowUpView: View {
         SharedStore.todayCheckIn = CheckInRecord(didMove: didMove, date: entry.date)
         SharedStore.clearPendingCheckIn()
 
+        // Cancel tonight's follow-up reminder — user already logged
+        NotificationService.cancelFollowUp()
+
         Task {
             try? await BackendService.syncEntry(entry)
             await MainActor.run {

@@ -39,6 +39,10 @@ struct ContentView: View {
             CalendarView()
                 .tabItem { Label("History", systemImage: "calendar") }
                 .tag(1)
+
+            CoachView()
+                .tabItem { Label("Coach", systemImage: "brain") }
+                .tag(2)
         }
         .sheet(isPresented: $showMorningNudge) {
             MorningNudgeView()
@@ -60,6 +64,10 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 processPendingWidgetCheckIn()
+                // If today is already logged, cancel any pending follow-up reminder
+                if todayEntry != nil {
+                    NotificationService.cancelFollowUp()
+                }
             }
         }
     }
@@ -80,6 +88,7 @@ struct ContentView: View {
         )
         modelContext.insert(entry)
         SharedStore.clearPendingCheckIn()
+        NotificationService.cancelFollowUp()
         // todayCheckIn already written by the intent — widget is already showing result
         WidgetCenter.shared.reloadAllTimelines()
 

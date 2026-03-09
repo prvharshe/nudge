@@ -48,6 +48,33 @@ enum BackendService {
         return json.message
     }
 
+    // MARK: - Ask your coach (free-form Q&A against Supermemory history)
+
+    static func askCoach(question: String) async throws -> String {
+        guard let url = URL(string: "\(baseURL)/api/coach") else {
+            throw URLError(.badURL)
+        }
+
+        let body: [String: Any] = [
+            "userId": UserService.userId,
+            "question": question
+        ]
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 20
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+
+        let json = try JSONDecoder().decode(CoachResponse.self, from: data)
+        return json.answer
+    }
+
     // MARK: - Delete all Supermemory entries for this user
     static func deleteSupermemoryData() async throws -> (deleted: Int, failed: Int) {
         let userId = UserService.userId
@@ -71,6 +98,10 @@ enum BackendService {
 
 private struct NudgeResponse: Decodable {
     let message: String
+}
+
+private struct CoachResponse: Decodable {
+    let answer: String
 }
 
 private struct DeleteResponse: Decodable {

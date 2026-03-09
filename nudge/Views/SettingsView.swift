@@ -17,6 +17,11 @@ struct SettingsView: View {
     @State private var deleteMemoryResult: String? = nil
     @State private var deleteMemoryFailed = false
 
+    // Notification time pickers
+    @State private var eveningTime  = Self.minutesToDate(NotificationService.eveningMinutes)
+    @State private var morningTime  = Self.minutesToDate(NotificationService.morningMinutes)
+    @State private var followUpTime = Self.minutesToDate(NotificationService.followUpMinutes)
+
     var body: some View {
         NavigationStack {
             List {
@@ -37,6 +42,40 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Account")
+                }
+
+                // MARK: - Notification times
+                Section {
+                    DatePicker(
+                        "Evening check-in",
+                        selection: $eveningTime,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .onChange(of: eveningTime) { _, newVal in
+                        NotificationService.setEvening(Self.dateToMinutes(newVal))
+                    }
+
+                    DatePicker(
+                        "Morning nudge",
+                        selection: $morningTime,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .onChange(of: morningTime) { _, newVal in
+                        NotificationService.setMorning(Self.dateToMinutes(newVal))
+                    }
+
+                    DatePicker(
+                        "Follow-up reminder",
+                        selection: $followUpTime,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .onChange(of: followUpTime) { _, newVal in
+                        NotificationService.setFollowUp(Self.dateToMinutes(newVal))
+                    }
+                } header: {
+                    Text("Notifications")
+                } footer: {
+                    Text("The follow-up reminder only fires on days you haven't logged yet.")
                 }
 
                 // MARK: - Reset local data
@@ -125,6 +164,21 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Time conversion helpers
+
+    private static func minutesToDate(_ minutes: Int) -> Date {
+        var comps = Calendar.current.dateComponents([.year, .month, .day], from: Date.now)
+        comps.hour   = minutes / 60
+        comps.minute = minutes % 60
+        comps.second = 0
+        return Calendar.current.date(from: comps) ?? Date.now
+    }
+
+    private static func dateToMinutes(_ date: Date) -> Int {
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return (comps.hour ?? 0) * 60 + (comps.minute ?? 0)
     }
 
     // MARK: - Actions

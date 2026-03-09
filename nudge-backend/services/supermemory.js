@@ -36,14 +36,15 @@ export async function addEntry(content, userId) {
  * Retrieve recent movement entries for this user.
  * @param {string} userId   UUID identifying the user
  * @param {number} limit    Max entries to return (default 14)
+ * @param {string} query    Semantic search query (default generic movement query)
  * @returns {string[]}      Array of content strings, newest first
  */
-export async function searchEntries(userId, limit = 14) {
+export async function searchEntries(userId, limit = 14, query = 'movement exercise activity rest day') {
   const res = await fetch(`${BASE}/search`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({
-      q: 'movement exercise activity rest day',
+      q: query,
       filters: {
         AND: [
           { filterType: 'array_contains', key: 'tags', value: userId },

@@ -4,6 +4,7 @@ import SwiftData
 struct CalendarView: View {
     @Query private var entries: [Entry]
     @State private var displayMonth = Date.now
+    @State private var selectedEntry: Entry? = nil
 
     private let calendar = Calendar.current
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
@@ -22,6 +23,11 @@ struct CalendarView: View {
             }
             .navigationTitle("History")
             .navigationBarTitleDisplayMode(.large)
+        }
+        .sheet(item: $selectedEntry) { entry in
+            EntryDetailView(entry: entry)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -82,7 +88,16 @@ struct CalendarView: View {
         return LazyVGrid(columns: columns, spacing: 8) {
             ForEach(0..<days.count, id: \.self) { index in
                 if let date = days[index] {
-                    DayCell(date: date, entry: entry(for: date))
+                    let entryForDay = entry(for: date)
+                    Button {
+                        if let e = entryForDay {
+                            selectedEntry = e
+                        }
+                    } label: {
+                        DayCell(date: date, entry: entryForDay)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(entryForDay == nil)
                 } else {
                     Color.clear
                         .frame(height: 44)
@@ -151,6 +166,79 @@ struct DayCell: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(isToday ? Color.accentColor.opacity(0.12) : Color.clear)
         )
+    }
+}
+
+// MARK: - Entry Detail Sheet
+
+struct EntryDetailView: View {
+    let entry: Entry
+    @Environment(\.dismiss) private var dismiss
+
+    private let activityLabels: [String: String] = [
+        "walk": "🚶 Walk",
+        "run": "🏃 Run",
+        "tired": "😴 Too tired",
+        "busy": "💼 Busy day"
+    ]
+
+    private var emoji: String { entry.didMove ? "🙌" : "😴" }
+    private var statusText: String { entry.didMove ? "Moved" : "Rest day" }
+    private var accent: Color { entry.didMove ? .green : Color(.secondaryLabel) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Drag handle area
+            Capsule()
+                .fill(Color(.systemGray4))
+                .frame(width: 36, height: 4)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
+
+            VStack(spacing: 20) {
+                // Emoji + status
+                VStack(spacing: 10) {
+                    Text(emoji)
+                        .font(.system(size: 52))
+
+                    Text(statusText)
+                        .font(.title2.bold())
+                        .foregroundStyle(accent)
+
+                    Text(entry.date, format: .dateTime.weekday(.wide).month(.wide).day().year())
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                // Activity chips
+                if !entry.activities.isEmpty {
+                    HStack(spacing: 8) {
+                        ForEach(entry.activities, id: \.self) { tag in
+                            Text(activityLabels[tag] ?? tag)
+                                .font(.subheadline)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 7)
+                                .background(Color(.systemGray6))
+                                .clipShape(Capsule())
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+
+                // Note
+                if let note = entry.note, !note.isEmpty {
+                    Text("\"\(note)\"")
+                        .font(.subheadline.italic())
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+            }
+            .padding(.horizontal, 24)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
 
