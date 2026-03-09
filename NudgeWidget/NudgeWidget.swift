@@ -1,3 +1,8 @@
+//
+//  NudgeWidget.swift
+//  NudgeWidget
+//
+
 import WidgetKit
 import SwiftUI
 import AppIntents
@@ -30,11 +35,10 @@ struct NudgeWidgetProvider: TimelineProvider {
     }
 }
 
-// MARK: - Root View (routes to prompt or result)
+// MARK: - Root View
 
 struct NudgeWidgetView: View {
     let entry: NudgeEntry
-    @Environment(\.widgetFamily) private var family
 
     var body: some View {
         Group {
@@ -54,14 +58,12 @@ struct CheckInPromptWidgetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
 
-            // App label
             Text("nudge")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
             Spacer(minLength: 6)
 
-            // Prompt
             Text("Did you\nmove today?")
                 .font(.system(size: 17, weight: .bold, design: .rounded))
                 .lineSpacing(3)
@@ -69,7 +71,6 @@ struct CheckInPromptWidgetView: View {
 
             Spacer(minLength: 10)
 
-            // YES / NO buttons
             HStack(spacing: 8) {
                 Button(intent: CheckInYesIntent()) {
                     HStack(spacing: 4) {
@@ -112,14 +113,13 @@ struct CheckInPromptWidgetView: View {
 struct CheckedInWidgetView: View {
     let checkIn: CheckInRecord
 
-    private var emoji: String  { checkIn.didMove ? "🙌" : "😴" }
-    private var label: String  { checkIn.didMove ? "Moved\ntoday"   : "Rest day\nlogged" }
-    private var accent: Color  { checkIn.didMove ? .green           : Color(.secondaryLabel) }
+    private var emoji: String { checkIn.didMove ? "🙌" : "😴" }
+    private var label: String { checkIn.didMove ? "Moved\ntoday" : "Rest day\nlogged" }
+    private var accent: Color { checkIn.didMove ? .green : Color(.secondaryLabel) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
 
-            // Top row: app name + date
             HStack(alignment: .firstTextBaseline) {
                 Text("nudge")
                     .font(.caption.weight(.semibold))
@@ -132,13 +132,11 @@ struct CheckedInWidgetView: View {
 
             Spacer()
 
-            // Big emoji
             Text(emoji)
                 .font(.system(size: 38))
 
             Spacer(minLength: 4)
 
-            // Status label
             Text(label)
                 .font(.system(size: 15, weight: .bold, design: .rounded))
                 .lineSpacing(2)
@@ -146,7 +144,6 @@ struct CheckedInWidgetView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        // Tapping the whole widget opens the app
         .widgetURL(URL(string: "nudge://open"))
     }
 }
@@ -167,7 +164,7 @@ struct NudgeWidget: Widget {
     }
 }
 
-// MARK: - Preview
+// MARK: - Previews
 
 #Preview(as: .systemSmall) {
     NudgeWidget()

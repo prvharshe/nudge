@@ -1,3 +1,8 @@
+//
+//  NudgeWidgetBundle.swift
+//  NudgeWidget
+//
+
 import WidgetKit
 import SwiftUI
 
