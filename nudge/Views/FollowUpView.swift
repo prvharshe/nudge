@@ -103,6 +103,10 @@ struct FollowUpView: View {
         )
         modelContext.insert(entry)
 
+        // Tell the widget today is logged so it switches to the result state
+        SharedStore.todayCheckIn = CheckInRecord(didMove: didMove, date: entry.date)
+        SharedStore.clearPendingCheckIn()
+
         Task {
             try? await BackendService.syncEntry(entry)
             await MainActor.run {

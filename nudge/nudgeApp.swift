@@ -34,8 +34,15 @@ struct nudgeApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .onOpenURL { url in
+                    // Handle widget tap-through: nudge://open → just bring app to front
+                    _ = url
+                }
         }
         .modelContainer(sharedModelContainer)
+        .backgroundTask(.appRefresh("processPendingCheckIn")) {
+            // Handled in ContentView via scenePhase instead
+        }
     }
 }
 

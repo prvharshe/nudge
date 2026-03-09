@@ -1,8 +1,10 @@
 import SwiftUI
 import SwiftData
+import WidgetKit
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Query private var entries: [Entry]
 
     @State private var selectedTab = 0
@@ -55,6 +57,33 @@ struct ContentView: View {
                 showMorningNudge = true
             }
         }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                processPendingWidgetCheckIn()
+            }
+        }
+    }
+
+    // MARK: - Widget pending check-in
+
+    /// When the user taps YES/NO in the widget, the intent writes a pending
+    /// record to the shared App Group. The next time the app comes to the
+    /// foreground we pick it up, create a SwiftData entry, and sync it.
+    private func processPendingWidgetCheckIn() {
+        guard todayEntry == nil,                          // not already logged
+              let pending = SharedStore.pendingCheckIn    // widget left something
+        else { return }
+
+        let entry = Entry(
+            date: pending.date,
+            didMove: pending.didMove
+        )
+        modelContext.insert(entry)
+        SharedStore.clearPendingCheckIn()
+        // todayCheckIn already written by the intent — widget is already showing result
+        WidgetCenter.shared.reloadAllTimelines()
+
+        Task { try? await BackendService.syncEntry(entry) }
     }
 
     // MARK: - Today Tab
