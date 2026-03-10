@@ -4,6 +4,8 @@ import cors from 'cors';
 import entriesRouter from './routes/entries.js';
 import nudgeRouter from './routes/nudge.js';
 import coachRouter from './routes/coach.js';
+import reactionRouter from './routes/reaction.js';
+import weeklyRouter from './routes/weekly.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3000;
@@ -16,6 +18,8 @@ app.use(express.json());
 app.use('/api/entries', entriesRouter);
 app.use('/api/nudge', nudgeRouter);
 app.use('/api/coach', coachRouter);
+app.use('/api/reaction', reactionRouter);
+app.use('/api/weekly', weeklyRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -24,8 +28,10 @@ app.get('/api/health', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Nudge backend running on http://localhost:${PORT}`);
-  console.log(`  POST /api/entries  — log movement`);
-  console.log(`  GET  /api/nudge    — get morning nudge`);
-  console.log(`  POST /api/coach    — ask your coach`);
-  console.log(`  GET  /api/health   — health check`);
+  console.log(`  POST /api/entries   — log movement`);
+  console.log(`  GET  /api/nudge     — get morning nudge`);
+  console.log(`  POST /api/coach     — ask your coach`);
+  console.log(`  POST /api/reaction  — post-log reaction`);
+  console.log(`  POST /api/weekly    — weekly pattern insight`);
+  console.log(`  GET  /api/health    — health check`);
 });

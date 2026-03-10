@@ -128,6 +128,7 @@ enum CheckInStep: Equatable {
 struct TodayDoneView: View {
     let entry: Entry
     @Binding var showMorningNudge: Bool
+    @Query private var allEntries: [Entry]
 
     private let activityLabels: [String: String] = [
         "walk": "🚶 Walk",
@@ -135,6 +136,32 @@ struct TodayDoneView: View {
         "tired": "😴 Too tired",
         "busy": "💼 Busy day"
     ]
+
+    // Consecutive moved days ending today + all-time best
+    private var streak: (current: Int, best: Int) {
+        let cal = Calendar.current
+        let movedDays = Set(allEntries.filter { $0.didMove }.map { cal.startOfDay(for: $0.date) })
+
+        // Current streak: walk back from today
+        var current = 0
+        var date = cal.startOfDay(for: Date.now)
+        while movedDays.contains(date) {
+            current += 1
+            date = cal.date(byAdding: .day, value: -1, to: date)!
+        }
+
+        // All-time best: scan sorted days for longest consecutive run
+        let sorted = movedDays.sorted()
+        var best = current
+        var run = 1
+        for i in 1..<sorted.count {
+            let gap = cal.dateComponents([.day], from: sorted[i - 1], to: sorted[i]).day ?? 0
+            run = gap == 1 ? run + 1 : 1
+            best = max(best, run)
+        }
+
+        return (current, best)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -152,6 +179,25 @@ struct TodayDoneView: View {
                     Text(Date.now, format: .dateTime.weekday(.wide).month().day())
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                }
+
+                // Streak badge — only shown when on a streak
+                if streak.current > 0 {
+                    HStack(spacing: 6) {
+                        Text("🔥")
+                        Text("\(streak.current) day streak")
+                            .font(.subheadline.weight(.semibold))
+                        if streak.best > streak.current {
+                            Text("· best \(streak.best)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.orange.opacity(0.1))
+                    .clipShape(Capsule())
                 }
 
                 // Activities

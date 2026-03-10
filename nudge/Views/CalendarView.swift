@@ -6,6 +6,14 @@ struct CalendarView: View {
     @State private var displayMonth = Date.now
     @State private var selectedEntry: Entry? = nil
 
+    // Weekly insight
+    @State private var weeklyInsight: String? = nil
+    @State private var weeklyInsightLoading = false
+    @State private var insightExpanded = false
+
+    private let insightTextKey = "nudge.weeklyInsightText"
+    private let insightDateKey  = "nudge.weeklyInsightDate"
+
     private let calendar = Calendar.current
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
     private let weekdaySymbols = Calendar.current.veryShortWeekdaySymbols
@@ -14,6 +22,7 @@ struct CalendarView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
+                    weeklyInsightCard
                     monthHeader
                     weekdayRow
                     dayGrid
@@ -29,6 +38,60 @@ struct CalendarView: View {
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
         }
+        .onAppear { loadOrGenerateInsight() }
+    }
+
+    // MARK: - Weekly insight card
+
+    private var weeklyInsightCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("This week", systemImage: "sparkles")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Spacer()
+                Button {
+                    generateInsight()
+                } label: {
+                    Image(systemName: weeklyInsightLoading ? "ellipsis" : "arrow.clockwise")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .disabled(weeklyInsightLoading)
+            }
+
+            if weeklyInsightLoading && weeklyInsight == nil {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Analysing your patterns…")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            } else if let insight = weeklyInsight {
+                Text(insightExpanded ? insight : firstSentence(of: insight))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .animation(.easeInOut(duration: 0.2), value: insightExpanded)
+
+                if insight != firstSentence(of: insight) {
+                    Button(insightExpanded ? "Show less" : "Read more") {
+                        withAnimation { insightExpanded.toggle() }
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Color.accentColor)
+                }
+            } else {
+                Text("Tap ↻ to generate your weekly pattern analysis.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
     // MARK: - Month navigation header
@@ -104,6 +167,51 @@ struct CalendarView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Weekly insight logic
+
+    private func loadOrGenerateInsight() {
+        // Show cached text immediately if it's from this calendar week
+        if let text = UserDefaults.standard.string(forKey: insightTextKey),
+           let date = UserDefaults.standard.object(forKey: insightDateKey) as? Date,
+           isSameWeek(date, as: Date.now) {
+            weeklyInsight = text
+            return
+        }
+        // Nothing fresh — generate
+        generateInsight()
+    }
+
+    private func generateInsight() {
+        guard !weeklyInsightLoading else { return }
+        weeklyInsightLoading = true
+        Task {
+            if let text = try? await BackendService.fetchWeeklyInsight() {
+                await MainActor.run {
+                    weeklyInsight = text
+                    insightExpanded = false
+                    UserDefaults.standard.set(text, forKey: insightTextKey)
+                    UserDefaults.standard.set(Date.now, forKey: insightDateKey)
+                    weeklyInsightLoading = false
+                }
+            } else {
+                await MainActor.run { weeklyInsightLoading = false }
+            }
+        }
+    }
+
+    private func isSameWeek(_ a: Date, as b: Date) -> Bool {
+        calendar.isDate(a, equalTo: b, toGranularity: .weekOfYear)
+    }
+
+    private func firstSentence(of text: String) -> String {
+        // Split on ". " or "." at end of string
+        if let range = text.range(of: ".", options: .literal) {
+            let end = text.index(after: range.lowerBound)
+            return String(text[..<end])
+        }
+        return text
     }
 
     // MARK: - Helpers

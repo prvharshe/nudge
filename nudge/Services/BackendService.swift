@@ -75,6 +75,58 @@ enum BackendService {
         return json.answer
     }
 
+    // MARK: - Post-log one-sentence reaction
+
+    static func fetchReaction(didMove: Bool, activities: [String]) async throws -> String {
+        guard let url = URL(string: "\(baseURL)/api/reaction") else {
+            throw URLError(.badURL)
+        }
+
+        let body: [String: Any] = [
+            "userId": UserService.userId,
+            "didMove": didMove,
+            "activities": activities
+        ]
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 10
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+
+        let json = try JSONDecoder().decode(ReactionResponse.self, from: data)
+        return json.reaction
+    }
+
+    // MARK: - Weekly pattern insight
+
+    static func fetchWeeklyInsight() async throws -> String {
+        guard let url = URL(string: "\(baseURL)/api/weekly") else {
+            throw URLError(.badURL)
+        }
+
+        let body: [String: Any] = ["userId": UserService.userId]
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 20
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+
+        let json = try JSONDecoder().decode(WeeklyResponse.self, from: data)
+        return json.insight
+    }
+
     // MARK: - Delete all Supermemory entries for this user
     static func deleteSupermemoryData() async throws -> (deleted: Int, failed: Int) {
         let userId = UserService.userId
@@ -102,6 +154,14 @@ private struct NudgeResponse: Decodable {
 
 private struct CoachResponse: Decodable {
     let answer: String
+}
+
+private struct ReactionResponse: Decodable {
+    let reaction: String
+}
+
+private struct WeeklyResponse: Decodable {
+    let insight: String
 }
 
 private struct DeleteResponse: Decodable {

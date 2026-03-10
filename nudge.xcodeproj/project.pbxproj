@@ -6,14 +6,76 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		0D5B9E602F5F07480065AB64 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0D5B9E5F2F5F07480065AB64 /* WidgetKit.framework */; };
+		0D5B9E622F5F07480065AB64 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0D5B9E612F5F07480065AB64 /* SwiftUI.framework */; };
+		0D5B9E6F2F5F07490065AB64 /* NudgeWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 0D5B9E5D2F5F07480065AB64 /* NudgeWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		0D5B9E6D2F5F07490065AB64 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0D5B9E272F5C703C0065AB64 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0D5B9E5C2F5F07480065AB64;
+			remoteInfo = NudgeWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		0D5B9E742F5F07490065AB64 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				0D5B9E6F2F5F07490065AB64 /* NudgeWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		0D5B9E2F2F5C703C0065AB64 /* nudge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = nudge.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0D5B9E5D2F5F07480065AB64 /* NudgeWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NudgeWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		0D5B9E5F2F5F07480065AB64 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		0D5B9E612F5F07480065AB64 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		0D5B9E7A2F5F0A420065AB64 /* NudgeWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NudgeWidgetExtension.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0D5B9E702F5F07490065AB64 /* Exceptions for "NudgeWidget" folder in "NudgeWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 0D5B9E5C2F5F07480065AB64 /* NudgeWidgetExtension */;
+		};
+		0D5B9E782F5F09020065AB64 /* Exceptions for "nudge" folder in "NudgeWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Shared/SharedStore.swift,
+			);
+			target = 0D5B9E5C2F5F07480065AB64 /* NudgeWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		0D5B9E312F5C703C0065AB64 /* nudge */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0D5B9E782F5F09020065AB64 /* Exceptions for "nudge" folder in "NudgeWidgetExtension" target */,
+			);
 			path = nudge;
+			sourceTree = "<group>";
+		};
+		0D5B9E632F5F07480065AB64 /* NudgeWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0D5B9E702F5F07490065AB64 /* Exceptions for "NudgeWidget" folder in "NudgeWidgetExtension" target */,
+			);
+			path = NudgeWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -26,13 +88,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		0D5B9E5A2F5F07480065AB64 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0D5B9E622F5F07480065AB64 /* SwiftUI.framework in Frameworks */,
+				0D5B9E602F5F07480065AB64 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		0D5B9E262F5C703C0065AB64 = {
 			isa = PBXGroup;
 			children = (
+				0D5B9E7A2F5F0A420065AB64 /* NudgeWidgetExtension.entitlements */,
 				0D5B9E312F5C703C0065AB64 /* nudge */,
+				0D5B9E632F5F07480065AB64 /* NudgeWidget */,
+				0D5B9E5E2F5F07480065AB64 /* Frameworks */,
 				0D5B9E302F5C703C0065AB64 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,8 +115,18 @@
 			isa = PBXGroup;
 			children = (
 				0D5B9E2F2F5C703C0065AB64 /* nudge.app */,
+				0D5B9E5D2F5F07480065AB64 /* NudgeWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		0D5B9E5E2F5F07480065AB64 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				0D5B9E5F2F5F07480065AB64 /* WidgetKit.framework */,
+				0D5B9E612F5F07480065AB64 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -55,10 +139,12 @@
 				0D5B9E2B2F5C703C0065AB64 /* Sources */,
 				0D5B9E2C2F5C703C0065AB64 /* Frameworks */,
 				0D5B9E2D2F5C703C0065AB64 /* Resources */,
+				0D5B9E742F5F07490065AB64 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				0D5B9E6E2F5F07490065AB64 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				0D5B9E312F5C703C0065AB64 /* nudge */,
@@ -69,6 +155,28 @@
 			productName = nudge;
 			productReference = 0D5B9E2F2F5C703C0065AB64 /* nudge.app */;
 			productType = "com.apple.product-type.application";
+		};
+		0D5B9E5C2F5F07480065AB64 /* NudgeWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0D5B9E712F5F07490065AB64 /* Build configuration list for PBXNativeTarget "NudgeWidgetExtension" */;
+			buildPhases = (
+				0D5B9E592F5F07480065AB64 /* Sources */,
+				0D5B9E5A2F5F07480065AB64 /* Frameworks */,
+				0D5B9E5B2F5F07480065AB64 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				0D5B9E632F5F07480065AB64 /* NudgeWidget */,
+			);
+			name = NudgeWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = NudgeWidgetExtension;
+			productReference = 0D5B9E5D2F5F07480065AB64 /* NudgeWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -81,6 +189,9 @@
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					0D5B9E2E2F5C703C0065AB64 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					0D5B9E5C2F5F07480065AB64 = {
 						CreatedOnToolsVersion = 26.3;
 					};
 				};
@@ -100,12 +211,20 @@
 			projectRoot = "";
 			targets = (
 				0D5B9E2E2F5C703C0065AB64 /* nudge */,
+				0D5B9E5C2F5F07480065AB64 /* NudgeWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		0D5B9E2D2F5C703C0065AB64 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0D5B9E5B2F5F07480065AB64 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +241,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		0D5B9E592F5F07480065AB64 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0D5B9E6E2F5F07490065AB64 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0D5B9E5C2F5F07480065AB64 /* NudgeWidgetExtension */;
+			targetProxy = 0D5B9E6D2F5F07490065AB64 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		0D5B9E3A2F5C703E0065AB64 /* Debug */ = {
@@ -251,6 +385,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = nudge/nudge.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = C68DCF3L62;
@@ -283,6 +418,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = nudge/nudge.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = C68DCF3L62;
@@ -310,6 +446,68 @@
 			};
 			name = Release;
 		};
+		0D5B9E722F5F07490065AB64 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = NudgeWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C68DCF3L62;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NudgeWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = NudgeWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ph.nudge.NudgeWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		0D5B9E732F5F07490065AB64 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = NudgeWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C68DCF3L62;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NudgeWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = NudgeWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ph.nudge.NudgeWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -327,6 +525,15 @@
 			buildConfigurations = (
 				0D5B9E3D2F5C703E0065AB64 /* Debug */,
 				0D5B9E3E2F5C703E0065AB64 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0D5B9E712F5F07490065AB64 /* Build configuration list for PBXNativeTarget "NudgeWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0D5B9E722F5F07490065AB64 /* Debug */,
+				0D5B9E732F5F07490065AB64 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

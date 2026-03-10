@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import WidgetKit
 
 struct FollowUpView: View {
     let didMove: Bool
@@ -17,9 +18,26 @@ struct FollowUpView: View {
     @State private var selectedTags: Set<String> = []
     @State private var note = ""
     @State private var isSaving = false
+    @State private var showReaction = false
+    @State private var reactionText: String? = nil
     @FocusState private var noteFocused: Bool
 
     var body: some View {
+        ZStack {
+          mainContent
+          if showReaction {
+              ReactionOverlayView(
+                  didMove: didMove,
+                  reactionText: reactionText,
+                  onDismiss: onDone
+              )
+              .transition(.opacity)
+          }
+        }
+        .animation(.easeInOut(duration: 0.25), value: showReaction)
+    }
+
+    private var mainContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             VStack(alignment: .leading, spacing: 6) {
@@ -41,6 +59,7 @@ struct FollowUpView: View {
                         label: chip.label,
                         isSelected: selectedTags.contains(chip.tag)
                     ) {
+                        Haptics.impact(.light)
                         if selectedTags.contains(chip.tag) {
                             selectedTags.remove(chip.tag)
                         } else {
@@ -94,6 +113,7 @@ struct FollowUpView: View {
         guard !isSaving else { return }
         isSaving = true
         noteFocused = false
+        Haptics.success()
 
         let entry = Entry(
             date: Date.now,
@@ -106,16 +126,25 @@ struct FollowUpView: View {
         // Tell the widget today is logged so it switches to the result state
         SharedStore.todayCheckIn = CheckInRecord(didMove: didMove, date: entry.date)
         SharedStore.clearPendingCheckIn()
+        WidgetCenter.shared.reloadAllTimelines()
 
         // Cancel tonight's follow-up reminder — user already logged
         NotificationService.cancelFollowUp()
 
+        // Show reaction overlay — onDone() is called by its dismiss handler
+        showReaction = true
+
+        // Fetch reaction + sync in parallel; onDone() fires via overlay dismiss
+        let activities = Array(selectedTags)
         Task {
-            try? await BackendService.syncEntry(entry)
-            await MainActor.run {
-                entry.synced = true
-                onDone()
+            async let reactionFetch = BackendService.fetchReaction(didMove: didMove, activities: activities)
+            async let syncTask: () = BackendService.syncEntry(entry)
+
+            if let text = try? await reactionFetch {
+                await MainActor.run { reactionText = text }
             }
+            try? await syncTask
+            await MainActor.run { entry.synced = true }
         }
     }
 }

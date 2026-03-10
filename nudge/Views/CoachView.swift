@@ -120,6 +120,9 @@ struct CoachView: View {
                 Spacer(minLength: 40)
             }
         }
+        // Swipe down on the empty state to dismiss keyboard
+        .scrollDismissesKeyboard(.interactively)
+        .onTapGesture { inputFocused = false }
     }
 
     // MARK: - Message list
@@ -141,6 +144,8 @@ struct CoachView: View {
                 .padding(.top, 16)
                 .padding(.bottom, 16)
             }
+            // Swipe down on the message list to dismiss keyboard → tab bar becomes reachable
+            .scrollDismissesKeyboard(.interactively)
             .onChange(of: messages.count) { _, _ in
                 withAnimation(.easeOut(duration: 0.3)) {
                     proxy.scrollTo(messages.last?.id, anchor: .bottom)

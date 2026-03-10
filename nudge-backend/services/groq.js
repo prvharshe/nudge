@@ -85,3 +85,81 @@ export async function generateCoachAnswer(entries, question) {
   if (!message) throw new Error('Groq returned empty coach answer');
   return message;
 }
+
+const REACTION_SYSTEM_PROMPT = `You are a personal movement coach reacting to a just-logged entry.
+Write EXACTLY ONE sentence (under 18 words) that:
+- References something specific from the person's recent history (a streak, a repeated pattern, a previous activity)
+- Feels like a genuine observation from someone who knows their data — not a compliment
+- Has no filler phrases like "great job", "well done", or "keep it up"
+- If there's no history yet, write a warm single sentence welcoming them to the start of their journey`;
+
+const WEEKLY_SYSTEM_PROMPT = `You are a personal movement coach giving a weekly pattern analysis.
+Write exactly 3 sentences:
+1. Consistency summary — use real numbers from the data (e.g. "X of the last Y days")
+2. Strongest pattern — name the specific day, activity type, or streak you see in the data
+3. One forward-looking observation for the coming week that feels personally relevant
+Rules:
+- Reference actual data points, not vague generalities
+- Conversational, warm tone — like a coach who genuinely reviewed the data
+- No filler phrases, no generic health advice`;
+
+/**
+ * Generate a one-sentence reaction to a just-logged entry.
+ * @param {string[]} entries  Recent entries for context
+ * @param {boolean}  didMove  Whether the user moved today
+ * @param {string[]} activities  Activity tags logged (e.g. ["walk","run"])
+ * @returns {string}  One-sentence reaction
+ */
+export async function generateReaction(entries, didMove, activities) {
+  const context = entries.length > 0
+    ? entries.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n')
+    : 'No prior history yet.';
+
+  const todayDesc = didMove
+    ? `They just logged movement today${activities.length ? ` (${activities.join(', ')})` : ''}.`
+    : "They just logged a rest day today.";
+
+  const userPrompt = `Recent history:\n${context}\n\n${todayDesc}\n\nWrite your one-sentence reaction.`;
+
+  const completion = await client().chat.completions.create({
+    model: 'llama-3.1-8b-instant',
+    messages: [
+      { role: 'system', content: REACTION_SYSTEM_PROMPT },
+      { role: 'user', content: userPrompt },
+    ],
+    max_tokens: 60,
+    temperature: 0.85,
+  });
+
+  const message = completion.choices[0]?.message?.content?.trim();
+  if (!message) throw new Error('Groq returned empty reaction');
+  return message;
+}
+
+/**
+ * Generate a 3-sentence weekly pattern insight.
+ * @param {string[]} entries  Up to 30 recent entries
+ * @returns {string}  The weekly insight text
+ */
+export async function generateWeeklyInsight(entries) {
+  if (entries.length === 0) {
+    return "You haven't logged any entries yet — start checking in each evening and I'll have a real pattern analysis for you next week.";
+  }
+
+  const context = entries.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n');
+  const userPrompt = `Here are this person's recent movement entries (newest first):\n\n${context}\n\nWrite their 3-sentence weekly pattern analysis.`;
+
+  const completion = await client().chat.completions.create({
+    model: 'llama-3.1-8b-instant',
+    messages: [
+      { role: 'system', content: WEEKLY_SYSTEM_PROMPT },
+      { role: 'user', content: userPrompt },
+    ],
+    max_tokens: 160,
+    temperature: 0.75,
+  });
+
+  const message = completion.choices[0]?.message?.content?.trim();
+  if (!message) throw new Error('Groq returned empty weekly insight');
+  return message;
+}

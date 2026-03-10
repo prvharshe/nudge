@@ -22,6 +22,7 @@ struct CheckInView: View {
 
             VStack(spacing: 14) {
                 Button {
+                    Haptics.impact(.medium)
                     onAnswer(true)
                 } label: {
                     HStack(spacing: 12) {
@@ -42,6 +43,7 @@ struct CheckInView: View {
                 }
 
                 Button {
+                    Haptics.impact(.medium)
                     onAnswer(false)
                 } label: {
                     HStack(spacing: 12) {
