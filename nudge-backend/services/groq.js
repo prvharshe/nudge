@@ -9,11 +9,13 @@ function client() {
 const NUDGE_SYSTEM_PROMPT = `You are a warm, encouraging personal movement coach.
 Your job is to write exactly 2 sentences as a morning nudge message.
 Rules:
-- You MUST reference specific details from the user's recent history (specific activities, notes, or patterns you see)
+- Each entry includes a date — use those dates to understand what is recent vs old. The most recent entry is the most important.
+- ONLY reference things that are explicitly stated in the entries. Never invent or assume activities or outcomes.
+- If the most recent entry says "did not move", acknowledge that honestly and gently — do not imply they moved
 - Never use generic filler phrases like "keep it up", "great job", or "you've got this"
 - Zero guilt or pressure — this is purely supportive
 - Conversational tone, like a thoughtful friend who knows them well
-- If you see patterns (e.g., moves on weekdays, walks often, mentions work stress), reference them
+- Reference specific patterns you see across multiple entries (streaks, favourite activities, recurring notes)
 - End on a gentle, forward-looking note for today`;
 
 const COACH_SYSTEM_PROMPT = `You are a knowledgeable, warm personal movement coach with access to this person's complete movement history.
@@ -27,8 +29,26 @@ Rules:
 - Never use filler phrases like "great job" or "keep it up"`;
 
 /**
+ * Parse a date from an entry string like "On Wed Mar 12 2025, the user..."
+ * Returns a Date object, or epoch if parsing fails.
+ */
+function parseDateFromEntry(entry) {
+  const match = entry.match(/^On (.+?),/);
+  if (!match) return new Date(0);
+  const d = new Date(match[1]);
+  return isNaN(d.getTime()) ? new Date(0) : d;
+}
+
+/**
+ * Sort entries newest-first by the date embedded in their content.
+ */
+function sortEntriesByDate(entries) {
+  return [...entries].sort((a, b) => parseDateFromEntry(b) - parseDateFromEntry(a));
+}
+
+/**
  * Generate a personalised 2-sentence morning nudge.
- * @param {string[]} entries  Recent entries as strings, newest first
+ * @param {string[]} entries  Entries from Supermemory (any order)
  * @returns {string}          The 2-sentence nudge message
  */
 export async function generateNudge(entries) {
@@ -36,12 +56,13 @@ export async function generateNudge(entries) {
     return "Today is a great day to start tracking your movement — even a short walk counts. Check in tonight and I'll have something personal for you tomorrow morning.";
   }
 
-  const context = entries
-    .slice(0, 14)
-    .map((e, i) => `Entry ${i + 1}: ${e}`)
-    .join('\n');
+  // Sort by the date embedded in the entry text so Groq sees true chronological order
+  const sorted = sortEntriesByDate(entries).slice(0, 14);
 
-  const userPrompt = `Here are this person's recent movement entries (newest first):\n\n${context}\n\nWrite their 2-sentence morning nudge for today.`;
+  const today = new Date().toDateString(); // e.g. "Thu Mar 13 2025"
+  const context = sorted.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n');
+
+  const userPrompt = `Today's date: ${today}\n\nHere are this person's recent movement entries, sorted newest first:\n\n${context}\n\nWrite their 2-sentence morning nudge for today.`;
 
   const completion = await client().chat.completions.create({
     model: 'llama-3.1-8b-instant',

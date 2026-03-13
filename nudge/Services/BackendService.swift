@@ -31,8 +31,11 @@ enum BackendService {
     }
 
     // MARK: - Fetch morning nudge message
-    static func fetchNudge() async throws -> String {
-        guard let url = URL(string: "\(baseURL)/api/nudge?userId=\(UserService.userId)") else {
+    static func fetchNudge(refresh: Bool = false) async throws -> String {
+        let userId = UserService.userId
+        var urlString = "\(baseURL)/api/nudge?userId=\(userId)"
+        if refresh { urlString += "&refresh=true" }
+        guard let url = URL(string: urlString) else {
             throw URLError(.badURL)
         }
 

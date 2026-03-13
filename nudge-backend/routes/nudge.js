@@ -13,20 +13,21 @@ function todayKey(userId) {
 }
 
 /**
- * GET /api/nudge?userId=...
+ * GET /api/nudge?userId=...&refresh=true
  *
  * Returns a personalised 2-sentence morning nudge using recent Supermemory entries.
  * Cached per user per day to avoid burning Groq credits.
+ * Pass refresh=true to bypass the cache (e.g. after fixing a bad nudge).
  */
 router.get('/', async (req, res) => {
-  const { userId } = req.query;
+  const { userId, refresh } = req.query;
 
   if (!userId) {
     return res.status(400).json({ error: 'userId is required' });
   }
 
   const key = todayKey(userId);
-  if (cache.has(key)) {
+  if (cache.has(key) && refresh !== 'true') {
     return res.json({ message: cache.get(key), cached: true });
   }
 
