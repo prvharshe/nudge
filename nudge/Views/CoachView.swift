@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import Combine
 
 // MARK: - Data model
@@ -20,6 +21,7 @@ struct CoachMessage: Codable, Identifiable {
 // MARK: - View
 
 struct CoachView: View {
+    @Query private var allEntries: [Entry]
     @State private var messages: [CoachMessage] = []
     @State private var inputText = ""
     @State private var isLoading = false
@@ -27,6 +29,7 @@ struct CoachView: View {
     @FocusState private var inputFocused: Bool
 
     private let storageKey = "nudge.coachMessages"
+    private let minimumEntries = 5
     private let suggestions = [
         "Why do I keep skipping certain days?",
         "What patterns do you see in my data?",
@@ -34,41 +37,130 @@ struct CoachView: View {
         "What activities do I do most often?"
     ]
 
+    private var isUnlocked: Bool { allEntries.count >= minimumEntries }
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                if messages.isEmpty && !isLoading {
-                    emptyState
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    messageList
-                }
+            if isUnlocked {
+                VStack(spacing: 0) {
+                    if messages.isEmpty && !isLoading {
+                        emptyState
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        messageList
+                    }
 
-                if let error = errorMessage {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 6)
-                        .transition(.opacity)
-                }
+                    if let error = errorMessage {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 6)
+                            .transition(.opacity)
+                    }
 
-                Divider()
-                inputBar
-            }
-            .navigationTitle("Coach")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if !messages.isEmpty {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Clear") { clearMessages() }
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                    Divider()
+                    inputBar
+                }
+                .navigationTitle("Coach")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    if !messages.isEmpty {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Clear") { clearMessages() }
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
+            } else {
+                lockedState
+                    .navigationTitle("Coach")
+                    .navigationBarTitleDisplayMode(.inline)
             }
         }
         .onAppear { loadMessages() }
+    }
+
+    // MARK: - Locked state (not enough data yet)
+
+    private var lockedState: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            VStack(spacing: 28) {
+                // Icon + title
+                VStack(spacing: 14) {
+                    Text("🔒")
+                        .font(.system(size: 52))
+
+                    VStack(spacing: 8) {
+                        Text("Still learning your rhythm")
+                            .font(.system(.title2, design: .rounded).weight(.bold))
+                            .multilineTextAlignment(.center)
+
+                        Text("Your coach needs at least \(minimumEntries) days of check-ins to spot real patterns and give you meaningful insights.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(3)
+                            .padding(.horizontal, 16)
+                    }
+                }
+
+                // Progress dots
+                VStack(spacing: 12) {
+                    HStack(spacing: 10) {
+                        ForEach(0..<minimumEntries, id: \.self) { i in
+                            ZStack {
+                                Circle()
+                                    .fill(i < allEntries.count
+                                          ? Theme.green
+                                          : Theme.card)
+                                    .frame(width: 18, height: 18)
+                                    .overlay(
+                                        Circle().stroke(
+                                            i < allEntries.count
+                                                ? Theme.green.opacity(0.4)
+                                                : Theme.purple.opacity(0.2),
+                                            lineWidth: 1
+                                        )
+                                    )
+
+                                if i < allEntries.count {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
+                            }
+                        }
+                    }
+
+                    Text(allEntries.isEmpty
+                         ? "No check-ins yet — start tonight"
+                         : "\(allEntries.count) of \(minimumEntries) days logged")
+                        .font(.system(.subheadline, design: .rounded).weight(.medium))
+                        .foregroundStyle(allEntries.count > 0 ? .primary : .secondary)
+                }
+                .padding(.vertical, 20)
+                .padding(.horizontal, 32)
+                .background(Theme.purple.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Theme.purple.opacity(0.2), lineWidth: 1)
+                )
+
+                // Hint
+                Label("Check in each evening from the Today tab", systemImage: "arrow.left")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 32)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Empty state
@@ -109,7 +201,7 @@ struct CoachView: View {
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
-                            .background(Color(.systemGray6))
+                            .background(Theme.card)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
                         .buttonStyle(.plain)
@@ -170,7 +262,7 @@ struct CoachView: View {
                 .lineLimit(1...4)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(Color(.systemGray6))
+                .background(Theme.card)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .onSubmit { sendMessage() }
 
@@ -179,7 +271,7 @@ struct CoachView: View {
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 32))
-                    .foregroundStyle(canSend ? Color.accentColor : Color.secondary.opacity(0.3))
+                    .foregroundStyle(canSend ? Theme.blue : Theme.muted)
             }
             .disabled(!canSend)
             .animation(.easeInOut(duration: 0.15), value: canSend)
@@ -266,7 +358,7 @@ struct MessageRow: View {
                     .font(.subheadline.weight(.medium))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Color.accentColor)
+                    .background(Theme.blue)
                     .foregroundStyle(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
@@ -283,7 +375,7 @@ struct MessageRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    .background(Color(.systemGray6))
+                    .background(Theme.card)
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
                 Spacer(minLength: 0)
@@ -314,7 +406,7 @@ struct TypingIndicatorView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
-            .background(Color(.systemGray6))
+            .background(Theme.card)
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
             Spacer()

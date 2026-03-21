@@ -49,11 +49,12 @@ function sortEntriesByDate(entries) {
 /**
  * Generate a personalised 2-sentence morning nudge.
  * @param {string[]} entries  Entries from Supermemory (any order)
+ * @param {string}   userName The user's first name (default: 'friend')
  * @returns {string}          The 2-sentence nudge message
  */
-export async function generateNudge(entries) {
+export async function generateNudge(entries, userName = 'friend') {
   if (entries.length === 0) {
-    return "Today is a great day to start tracking your movement — even a short walk counts. Check in tonight and I'll have something personal for you tomorrow morning.";
+    return `Today is a great day to start tracking your movement, ${userName} — even a short walk counts. Check in tonight and I'll have something personal for you tomorrow morning.`;
   }
 
   // Sort by the date embedded in the entry text so Groq sees true chronological order
@@ -62,7 +63,7 @@ export async function generateNudge(entries) {
   const today = new Date().toDateString(); // e.g. "Thu Mar 13 2025"
   const context = sorted.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n');
 
-  const userPrompt = `Today's date: ${today}\n\nHere are this person's recent movement entries, sorted newest first:\n\n${context}\n\nWrite their 2-sentence morning nudge for today.`;
+  const userPrompt = `Today's date: ${today}\n\nYou are writing for someone named ${userName}. Here are their recent movement entries, sorted newest first:\n\n${context}\n\nWrite their 2-sentence morning nudge for today. You may naturally use their name (${userName}) once if it feels right.`;
 
   const completion = await client().chat.completions.create({
     model: 'llama-3.1-8b-instant',

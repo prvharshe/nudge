@@ -20,7 +20,7 @@ function todayKey(userId) {
  * Pass refresh=true to bypass the cache (e.g. after fixing a bad nudge).
  */
 router.get('/', async (req, res) => {
-  const { userId, refresh } = req.query;
+  const { userId, refresh, userName } = req.query;
 
   if (!userId) {
     return res.status(400).json({ error: 'userId is required' });
@@ -33,7 +33,7 @@ router.get('/', async (req, res) => {
 
   try {
     const entries = await searchEntries(userId, 14);
-    const message = await generateNudge(entries);
+    const message = await generateNudge(entries, userName || 'friend');
     cache.set(key, message);
     res.json({ message });
   } catch (err) {

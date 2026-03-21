@@ -81,7 +81,7 @@ struct CalendarView: View {
                         withAnimation { insightExpanded.toggle() }
                     }
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Theme.blue)
                 }
             } else {
                 Text("Tap ↻ to generate your weekly pattern analysis.")
@@ -90,7 +90,7 @@ struct CalendarView: View {
             }
         }
         .padding(16)
-        .background(Color(.systemGray6))
+        .background(Theme.card)
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -260,7 +260,7 @@ struct DayCell: View {
 
             if let entry {
                 Circle()
-                    .fill(entry.didMove ? Color.green : Color(.systemGray4))
+                    .fill(entry.didMove ? Theme.green : Theme.muted)
                     .frame(width: 7, height: 7)
             } else {
                 Circle()
@@ -272,7 +272,7 @@ struct DayCell: View {
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(isToday ? Color.accentColor.opacity(0.12) : Color.clear)
+                .fill(isToday ? Theme.blue.opacity(0.12) : Color.clear)
         )
     }
 }
@@ -292,13 +292,13 @@ struct EntryDetailView: View {
 
     private var emoji: String { entry.didMove ? "🙌" : "😴" }
     private var statusText: String { entry.didMove ? "Moved" : "Rest day" }
-    private var accent: Color { entry.didMove ? .green : Color(.secondaryLabel) }
+    private var accent: Color { entry.didMove ? Theme.green : Theme.muted }
 
     var body: some View {
         VStack(spacing: 0) {
             // Drag handle area
             Capsule()
-                .fill(Color(.systemGray4))
+                .fill(Theme.muted)
                 .frame(width: 36, height: 4)
                 .padding(.top, 12)
                 .padding(.bottom, 24)
@@ -326,7 +326,7 @@ struct EntryDetailView: View {
                                 .font(.subheadline)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 7)
-                                .background(Color(.systemGray6))
+                                .background(Theme.card)
                                 .clipShape(Capsule())
                         }
                     }

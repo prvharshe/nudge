@@ -7,6 +7,9 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Query private var entries: [Entry]
 
+    @EnvironmentObject private var sceneManager: SceneManager
+    @AppStorage("nudge.onboardingComplete") private var onboardingComplete = false
+
     @State private var selectedTab = 0
     @State private var showMorningNudge = false
     @State private var showSettings = false
@@ -22,13 +25,38 @@ struct ContentView: View {
         TabView(selection: $selectedTab) {
             NavigationStack {
                 todayTab
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background {
+                        // SceneKit handles day/night transition via SCNTransaction
+                        TrackSceneView(isDark: sceneManager.isDark)
+                            .ignoresSafeArea()
+                    }
+                    .navigationTitle("Today")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbarBackground(.hidden, for: .navigationBar)
                     .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.85)) {
+                                    sceneManager.toggle()
+                                }
+                            } label: {
+                                Image(systemName: sceneManager.isDark ? "sun.max.fill" : "moon.stars.fill")
+                                    .symbolRenderingMode(.hierarchical)
+                                    .foregroundStyle(Theme.blue)
+                                    .font(.system(size: 17, weight: .medium))
+                                    .padding(6)
+                                    .background(.ultraThinMaterial, in: Circle())
+                            }
+                        }
                         ToolbarItem(placement: .topBarTrailing) {
                             Button {
                                 showSettings = true
                             } label: {
                                 Image(systemName: "gearshape")
                                     .foregroundStyle(.secondary)
+                                    .padding(6)
+                                    .background(.ultraThinMaterial, in: Circle())
                             }
                         }
                     }
@@ -51,6 +79,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
+        }
+        .fullScreenCover(isPresented: .constant(!onboardingComplete)) {
+            OnboardingView()
         }
         .onReceive(NotificationCenter.default.publisher(for: .nudgeLaunchType)) { note in
             guard let type = note.object as? String else { return }
@@ -137,6 +168,8 @@ struct TodayDoneView: View {
         "busy": "💼 Busy day"
     ]
 
+    private var accent: Color { entry.didMove ? Theme.green : Theme.muted }
+
     // Consecutive moved days ending today + all-time best
     private var streak: (current: Int, best: Int) {
         let cal = Calendar.current
@@ -163,88 +196,116 @@ struct TodayDoneView: View {
         return (current, best)
     }
 
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var accentColor: Color {
+        entry.didMove
+            ? (colorScheme == .dark ? Color(hex: "52D990") : Theme.green)
+            : (colorScheme == .dark ? Color(hex: "C8AA8E") : Theme.muted)
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
+        GeometryReader { geo in
+            ScrollView {
+                VStack(spacing: 22) {
+                    // ── Hero status card (frosted glass, color-tinted) ──────────
+                    VStack(spacing: 18) {
+                        Text(entry.didMove ? "🙌" : "😴")
+                            .font(.system(size: 66))
 
-            VStack(spacing: 24) {
-                // Status badge
-                VStack(spacing: 12) {
-                    Text(entry.didMove ? "🙌" : "😴")
-                        .font(.system(size: 56))
+                        VStack(spacing: 6) {
+                            Text(entry.didMove ? "You moved today" : "Rest day logged")
+                                .font(.system(.title2, design: .rounded).weight(.bold))
+                                .foregroundStyle(accentColor)
 
-                    Text(entry.didMove ? "You moved today" : "Rest day logged")
-                        .font(.title2.bold())
-
-                    Text(Date.now, format: .dateTime.weekday(.wide).month().day())
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                // Streak badge — only shown when on a streak
-                if streak.current > 0 {
-                    HStack(spacing: 6) {
-                        Text("🔥")
-                        Text("\(streak.current) day streak")
-                            .font(.subheadline.weight(.semibold))
-                        if streak.best > streak.current {
-                            Text("· best \(streak.best)")
-                                .font(.caption)
+                            Text(Date.now, format: .dateTime.weekday(.wide).month().day())
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .foregroundStyle(.orange)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.orange.opacity(0.1))
-                    .clipShape(Capsule())
-                }
-
-                // Activities
-                if !entry.activities.isEmpty {
-                    HStack(spacing: 8) {
-                        ForEach(entry.activities, id: \.self) { tag in
-                            Text(activityLabels[tag] ?? tag)
-                                .font(.subheadline)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color(.systemGray6))
-                                .clipShape(Capsule())
-                        }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 42)
+                    .background {
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .fill(accent.opacity(colorScheme == .dark ? 0.18 : 0.08))
                     }
-                    .flexibleRow()
-                }
+                    .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(accent.opacity(colorScheme == .dark ? 0.35 : 0.20), lineWidth: 1)
+                    )
 
-                // Note
-                if let note = entry.note {
-                    Text("\"\(note)\"")
-                        .font(.subheadline.italic())
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
+                    // ── Streak ──────────────────────────────────────────────────
+                    if streak.current > 0 {
+                        HStack(spacing: 6) {
+                            Text("🔥")
+                            Text("\(streak.current) day streak")
+                                .font(.subheadline.weight(.semibold))
+                            if streak.best > streak.current {
+                                Text("· best \(streak.best)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 9)
+                        .background(Color.orange.opacity(colorScheme == .dark ? 0.20 : 0.10))
+                        .clipShape(Capsule())
+                    }
+
+                    // ── Activity chips (frosted) ─────────────────────────────────
+                    if !entry.activities.isEmpty {
+                        HStack(spacing: 8) {
+                            ForEach(entry.activities, id: \.self) { tag in
+                                Text(activityLabels[tag] ?? tag)
+                                    .font(.subheadline)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .background(.ultraThinMaterial, in: Capsule())
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    }
+
+                    // ── Note ─────────────────────────────────────────────────────
+                    if let note = entry.note, !note.isEmpty {
+                        Text("\"\(note)\"")
+                            .font(.subheadline.italic())
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                    }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 120)
             }
-            .padding(.horizontal, 24)
-
-            Spacer()
-
-            // Morning nudge CTA
+        }
+        // ── Floating CTA ─────────────────────────────────────────────────────────
+        .safeAreaInset(edge: .bottom) {
             Button {
                 showMorningNudge = true
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "sparkles")
+                        .font(.subheadline.weight(.semibold))
                     Text("See your morning nudge")
                         .font(.subheadline.weight(.semibold))
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(Color.accentColor.opacity(0.12))
-                .foregroundStyle(Color.accentColor)
+                .padding(.vertical, 17)
+                .background(Theme.blue)
+                .foregroundStyle(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             }
+            .buttonStyle(.plain)
             .padding(.horizontal, 24)
-            .padding(.bottom, 40)
+            .padding(.bottom, 24)
+            .padding(.top, 10)
+            .background(.ultraThinMaterial)
         }
     }
 }

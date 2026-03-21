@@ -75,7 +75,7 @@ struct FollowUpView: View {
                 .focused($noteFocused)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-                .background(Color(.systemGray6))
+                .background(Theme.card)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .padding(.horizontal, 24)
                 .padding(.top, 20)
@@ -89,7 +89,7 @@ struct FollowUpView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(Color(.systemGray6))
+                .background(Theme.card)
                 .foregroundStyle(.secondary)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
 
@@ -98,7 +98,7 @@ struct FollowUpView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(Color.accentColor)
+                .background(Theme.blue)
                 .foregroundStyle(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .disabled(isSaving)
@@ -106,6 +106,7 @@ struct FollowUpView: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 40)
         }
+        .background(Theme.background.ignoresSafeArea())
         .onTapGesture { noteFocused = false }
     }
 
@@ -166,12 +167,12 @@ struct ChipButton: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(isSelected ? Color.accentColor.opacity(0.15) : Color(.systemGray6))
-            .foregroundStyle(isSelected ? Color.accentColor : .primary)
+            .background(isSelected ? Theme.blue.opacity(0.15) : Theme.card)
+            .foregroundStyle(isSelected ? Theme.blue : .primary)
             .clipShape(Capsule())
             .overlay(
                 Capsule()
-                    .stroke(isSelected ? Color.accentColor.opacity(0.4) : Color.clear, lineWidth: 1.5)
+                    .stroke(isSelected ? Theme.blue.opacity(0.4) : Color.clear, lineWidth: 1.5)
             )
         }
         .buttonStyle(.plain)

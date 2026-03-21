@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct MorningNudgeView: View {
+    @AppStorage("nudge.userName") private var userName = ""
+
     @State private var message: String? = nil
     @State private var isLoading = true
     @State private var isRefreshing = false
@@ -14,10 +16,16 @@ struct MorningNudgeView: View {
             Spacer()
 
             VStack(spacing: 28) {
-                Image(systemName: "sun.horizon.fill")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.orange)
-                    .symbolEffect(.pulse, isActive: isLoading || isRefreshing)
+                VStack(spacing: 6) {
+                    Image(systemName: "sun.horizon.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.orange)
+                        .symbolEffect(.pulse, isActive: isLoading || isRefreshing)
+
+                    Text("Good morning\(userName.isEmpty ? "" : ", \(userName)") ✨")
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
 
                 if isLoading {
                     VStack(spacing: 10) {

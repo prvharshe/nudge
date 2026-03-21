@@ -33,7 +33,12 @@ enum BackendService {
     // MARK: - Fetch morning nudge message
     static func fetchNudge(refresh: Bool = false) async throws -> String {
         let userId = UserService.userId
+        let userName = UserDefaults.standard.string(forKey: "nudge.userName") ?? ""
         var urlString = "\(baseURL)/api/nudge?userId=\(userId)"
+        if !userName.isEmpty,
+           let encoded = userName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+            urlString += "&userName=\(encoded)"
+        }
         if refresh { urlString += "&refresh=true" }
         guard let url = URL(string: urlString) else {
             throw URLError(.badURL)

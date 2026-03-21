@@ -12,6 +12,7 @@ import UserNotifications
 @main
 struct nudgeApp: App {
     let notificationDelegate = NotificationDelegate()
+    @StateObject private var sceneManager = SceneManager()
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([Entry.self])
@@ -25,15 +26,16 @@ struct nudgeApp: App {
 
     init() {
         UNUserNotificationCenter.current().delegate = notificationDelegate
-        Task {
-            await NotificationService.requestPermission()
-            NotificationService.scheduleAll()
-        }
+        // Schedule notifications on every launch — no-ops gracefully if permission not yet granted.
+        // Permission is requested during onboarding (OnboardingView step 3).
+        NotificationService.scheduleAll()
     }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(sceneManager)
+                .preferredColorScheme(sceneManager.preferredScheme)
                 .onOpenURL { url in
                     // Handle widget tap-through: nudge://open → just bring app to front
                     _ = url

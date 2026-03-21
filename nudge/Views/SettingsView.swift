@@ -22,6 +22,10 @@ struct SettingsView: View {
     @State private var morningTime  = Self.minutesToDate(NotificationService.morningMinutes)
     @State private var followUpTime = Self.minutesToDate(NotificationService.followUpMinutes)
 
+    #if DEBUG
+    @State private var backendURL = UserDefaults.standard.string(forKey: "nudge.backendURL") ?? ""
+    #endif
+
     var body: some View {
         NavigationStack {
             List {
@@ -155,6 +159,29 @@ struct SettingsView: View {
                 } message: {
                     Text("This permanently deletes all your movement history from Supermemory. Your morning nudge will be generic until you build up new history. This cannot be undone.")
                 }
+
+                // MARK: - Debug: Backend URL override
+                #if DEBUG
+                Section {
+                    TextField("https://…", text: $backendURL)
+                        .font(.caption.monospaced())
+                        .autocorrectionDisabled()
+                        .autocapitalization(.none)
+                        .keyboardType(.URL)
+                        .onSubmit {
+                            let trimmed = backendURL.trimmingCharacters(in: .whitespaces)
+                            if trimmed.isEmpty {
+                                UserDefaults.standard.removeObject(forKey: "nudge.backendURL")
+                            } else {
+                                UserDefaults.standard.set(trimmed, forKey: "nudge.backendURL")
+                            }
+                        }
+                } header: {
+                    Text("Backend URL (Debug)")
+                } footer: {
+                    Text("Leave empty to use the Railway production server. This section is only visible in Debug builds.")
+                }
+                #endif
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
