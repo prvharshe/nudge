@@ -26,7 +26,8 @@ Rules:
 - If you spot a real pattern (specific days, activity types, streaks, gaps), name it explicitly
 - If there's not enough history to answer well, say so honestly and tell them what to log
 - Never be preachy or lecture about health — focus on patterns, observations, and encouragement
-- Never use filler phrases like "great job" or "keep it up"`;
+- Never use filler phrases like "great job" or "keep it up"
+- IMPORTANT: If the person sends a short acknowledgment like "thanks", "ok", "alright", "got it", "cool", or similar closing remarks — do NOT repeat or summarise what was already discussed. Instead, respond with a single genuinely motivating sentence that highlights one concrete positive thing you can see in their data (a streak, a favourite activity, a recent win). Keep it fresh, specific, and forward-looking.`;
 
 /**
  * Parse a date from an entry string like "On Wed Mar 12 2025, the user..."
@@ -84,21 +85,25 @@ export async function generateNudge(entries, userName = 'friend') {
  * Answer a free-form question from the user using their movement history as context.
  * @param {string[]} entries  Relevant entries from Supermemory (semantic search results)
  * @param {string}   question The user's question
+ * @param {Array<{role: string, content: string}>} history  Recent conversation turns (oldest first)
  * @returns {string}          The coach's answer
  */
-export async function generateCoachAnswer(entries, question) {
+export async function generateCoachAnswer(entries, question, history = []) {
   const context = entries.length > 0
     ? entries.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n')
     : 'No movement history stored yet.';
 
-  const userPrompt = `Here is this person's relevant movement history (most relevant entries first):\n\n${context}\n\nTheir question: ${question}`;
+  const systemWithContext = `${COACH_SYSTEM_PROMPT}\n\nMovement history context (most relevant entries first):\n${context}`;
+
+  const messages = [
+    { role: 'system', content: systemWithContext },
+    ...history,
+    { role: 'user', content: question },
+  ];
 
   const completion = await client().chat.completions.create({
     model: 'llama-3.1-8b-instant',
-    messages: [
-      { role: 'system', content: COACH_SYSTEM_PROMPT },
-      { role: 'user', content: userPrompt },
-    ],
+    messages,
     max_tokens: 200,
     temperature: 0.75,
   });
