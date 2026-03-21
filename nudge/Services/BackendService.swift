@@ -64,14 +64,15 @@ enum BackendService {
 
     // MARK: - Ask your coach (free-form Q&A against Supermemory history)
 
-    static func askCoach(question: String) async throws -> String {
+    static func askCoach(question: String, history: [[String: String]] = []) async throws -> String {
         guard let url = URL(string: "\(baseURL)/api/coach") else {
             throw URLError(.badURL)
         }
 
         let body: [String: Any] = [
             "userId": UserService.userId,
-            "question": question
+            "question": question,
+            "history": history
         ]
 
         var request = URLRequest(url: url)

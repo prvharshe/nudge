@@ -295,9 +295,18 @@ struct CoachView: View {
         isLoading = true
         errorMessage = nil
 
+        // Build conversation history from the last 5 exchanges (10 turns)
+        let recentMessages = messages.suffix(5)
+        let history: [[String: String]] = recentMessages.flatMap { msg in
+            [
+                ["role": "user", "content": msg.question],
+                ["role": "assistant", "content": msg.answer]
+            ]
+        }
+
         Task {
             do {
-                let answer = try await BackendService.askCoach(question: question)
+                let answer = try await BackendService.askCoach(question: question, history: history)
                 await MainActor.run {
                     let msg = CoachMessage(question: question, answer: answer)
                     withAnimation { messages.append(msg) }
