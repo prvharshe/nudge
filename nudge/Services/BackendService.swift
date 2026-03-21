@@ -6,17 +6,23 @@ enum BackendService {
     }
 
     // MARK: - Sync entry to Supermemory via backend
-    static func syncEntry(_ entry: Entry) async throws {
+    static func syncEntry(_ entry: Entry, stats: DayStats? = nil) async throws {
         guard let url = URL(string: "\(baseURL)/api/entries") else { return }
 
         let formatter = ISO8601DateFormatter()
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "userId": UserService.userId,
             "date": formatter.string(from: entry.date),
             "didMove": entry.didMove,
             "activities": entry.activities,
             "note": entry.note as Any
         ]
+        if let s = stats {
+            body["steps"] = s.steps
+            if let m = s.workoutMinutes { body["workoutMinutes"] = m }
+            if let c = s.calories       { body["calories"] = c }
+            if let t = s.workoutType    { body["workoutType"] = t }
+        }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

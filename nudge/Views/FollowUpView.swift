@@ -4,6 +4,8 @@ import WidgetKit
 
 struct FollowUpView: View {
     let didMove: Bool
+    var preselectedTag: String? = nil
+    var entryDate: Date = Date.now
     let onDone: () -> Void
 
     @Environment(\.modelContext) private var modelContext
@@ -108,6 +110,9 @@ struct FollowUpView: View {
         }
         .background(Theme.background.ignoresSafeArea())
         .onTapGesture { noteFocused = false }
+        .onAppear {
+            if let tag = preselectedTag { selectedTags.insert(tag) }
+        }
     }
 
     private func save() {
@@ -117,7 +122,7 @@ struct FollowUpView: View {
         Haptics.success()
 
         let entry = Entry(
-            date: Date.now,
+            date: entryDate,
             didMove: didMove,
             activities: Array(selectedTags),
             note: note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : note
@@ -135,11 +140,13 @@ struct FollowUpView: View {
         // Show reaction overlay — onDone() is called by its dismiss handler
         showReaction = true
 
-        // Fetch reaction + sync in parallel; onDone() fires via overlay dismiss
+        // Fetch reaction + HK stats + sync in parallel; onDone() fires via overlay dismiss
         let activities = Array(selectedTags)
+        let entryDate = entry.date
         Task {
             async let reactionFetch = BackendService.fetchReaction(didMove: didMove, activities: activities)
-            async let syncTask: () = BackendService.syncEntry(entry)
+            let stats = await HealthKitService.shared.fetchStats(for: entryDate)
+            async let syncTask: () = BackendService.syncEntry(entry, stats: stats)
 
             if let text = try? await reactionFetch {
                 await MainActor.run { reactionText = text }

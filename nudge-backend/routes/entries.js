@@ -10,7 +10,7 @@ const router = Router();
  * Stores the evening check-in entry in Supermemory as natural language.
  */
 router.post('/', async (req, res) => {
-  const { userId, date, didMove, activities = [], note } = req.body;
+  const { userId, date, didMove, activities = [], note, steps, workoutMinutes, calories, workoutType } = req.body;
 
   if (!userId || typeof didMove !== 'boolean') {
     return res.status(400).json({ error: 'userId and didMove are required' });
@@ -24,7 +24,13 @@ router.post('/', async (req, res) => {
     : '';
   const noteStr = note ? `Note: "${note}".` : '';
 
-  const content = `On ${dateStr}, the user ${movementStr}. ${activityStr} ${noteStr}`.trim().replace(/\s+/g, ' ');
+  const hkParts = [
+    steps != null         ? `Steps: ${Number(steps).toLocaleString()}.` : '',
+    workoutType && workoutMinutes ? `Workout: ${workoutMinutes}-minute ${workoutType}.` : '',
+    calories != null      ? `Active calories: ${calories}.` : '',
+  ].filter(Boolean).join(' ');
+
+  const content = `On ${dateStr}, the user ${movementStr}. ${activityStr} ${noteStr} ${hkParts}`.trim().replace(/\s+/g, ' ');
 
   try {
     await addEntry(content, userId);

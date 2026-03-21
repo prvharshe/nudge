@@ -123,7 +123,10 @@ struct ContentView: View {
         // todayCheckIn already written by the intent — widget is already showing result
         WidgetCenter.shared.reloadAllTimelines()
 
-        Task { try? await BackendService.syncEntry(entry) }
+        Task {
+            let stats = await HealthKitService.shared.fetchStats(for: entry.date)
+            try? await BackendService.syncEntry(entry, stats: stats)
+        }
     }
 
     // MARK: - Today Tab
@@ -135,11 +138,11 @@ struct ContentView: View {
         } else {
             switch checkInStep {
             case .prompt:
-                CheckInView { didMove in
-                    withAnimation { checkInStep = .followUp(didMove: didMove) }
+                CheckInView { didMove, preselectedTag in
+                    withAnimation { checkInStep = .followUp(didMove: didMove, preselectedTag: preselectedTag) }
                 }
-            case .followUp(let didMove):
-                FollowUpView(didMove: didMove) {
+            case .followUp(let didMove, let preselectedTag):
+                FollowUpView(didMove: didMove, preselectedTag: preselectedTag) {
                     withAnimation { checkInStep = .prompt }
                 }
             }
@@ -151,7 +154,7 @@ struct ContentView: View {
 
 enum CheckInStep: Equatable {
     case prompt
-    case followUp(didMove: Bool)
+    case followUp(didMove: Bool, preselectedTag: String?)
 }
 
 // MARK: - Today Done View (already logged)
@@ -160,6 +163,7 @@ struct TodayDoneView: View {
     let entry: Entry
     @Binding var showMorningNudge: Bool
     @Query private var allEntries: [Entry]
+    @State private var todaySteps: Int? = nil
 
     private let activityLabels: [String: String] = [
         "walk": "🚶 Walk",
@@ -256,6 +260,13 @@ struct TodayDoneView: View {
                         .clipShape(Capsule())
                     }
 
+                    // ── Step count ───────────────────────────────────────────────
+                    if let steps = todaySteps, steps > 0 {
+                        Text("\(steps.formatted()) steps today")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
                     // ── Activity chips (frosted) ─────────────────────────────────
                     if !entry.activities.isEmpty {
                         HStack(spacing: 8) {
@@ -285,6 +296,10 @@ struct TodayDoneView: View {
             }
         }
         // ── Floating CTA ─────────────────────────────────────────────────────────
+        .task {
+            let stats = await HealthKitService.shared.fetchStats(for: .now)
+            todaySteps = stats?.steps
+        }
         .safeAreaInset(edge: .bottom) {
             Button {
                 showMorningNudge = true

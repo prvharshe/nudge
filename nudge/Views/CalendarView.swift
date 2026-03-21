@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Charts
 
 struct CalendarView: View {
     @Query private var entries: [Entry]
@@ -10,6 +11,14 @@ struct CalendarView: View {
     @State private var weeklyInsight: String? = nil
     @State private var weeklyInsightLoading = false
     @State private var insightExpanded = false
+
+    // 7-day step chart
+    @State private var weeklySteps: [(date: Date, steps: Int)] = []
+
+    // Auto-fill missed days
+    @State private var missedDays: [Date] = []
+    @State private var retroDate: Date? = nil
+    @State private var showRetroSheet = false
 
     private let insightTextKey = "nudge.weeklyInsightText"
     private let insightDateKey  = "nudge.weeklyInsightDate"
@@ -22,7 +31,13 @@ struct CalendarView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
+                    if !missedDays.isEmpty {
+                        missedDaysBanner
+                    }
                     weeklyInsightCard
+                    if !weeklySteps.isEmpty {
+                        weeklyStepsChart
+                    }
                     monthHeader
                     weekdayRow
                     dayGrid
@@ -35,10 +50,69 @@ struct CalendarView: View {
         }
         .sheet(item: $selectedEntry) { entry in
             EntryDetailView(entry: entry)
-                .presentationDetents([.medium])
+                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
-        .onAppear { loadOrGenerateInsight() }
+        .sheet(isPresented: $showRetroSheet) {
+            if let date = retroDate {
+                retroLogSheet(for: date)
+            }
+        }
+        .onAppear {
+            loadOrGenerateInsight()
+            loadWeeklySteps()
+            loadMissedDays()
+        }
+    }
+
+    // MARK: - Missed days banner
+
+    private var missedDaysBanner: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(missedDays, id: \.self) { day in
+                HStack(spacing: 10) {
+                    Image(systemName: "figure.walk.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(Theme.green)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Looks like you moved on \(day.formatted(.dateTime.weekday(.wide)))")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Want to log it retroactively?")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button("Log it") {
+                        retroDate = day
+                        showRetroSheet = true
+                    }
+                    .font(.caption.weight(.bold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Theme.green)
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Theme.card)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func retroLogSheet(for date: Date) -> some View {
+        FollowUpView(didMove: true, entryDate: date, onDone: {
+            missedDays.removeAll { calendar.isDate($0, inSameDayAs: date) }
+            showRetroSheet = false
+            retroDate = nil
+        })
+        .presentationDetents([.large])
     }
 
     // MARK: - Weekly insight card
@@ -88,6 +162,40 @@ struct CalendarView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
+        }
+        .padding(16)
+        .background(Theme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    // MARK: - 7-day step chart
+
+    private var weeklyStepsChart: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Steps · last 7 days")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Chart(weeklySteps, id: \.date) { item in
+                BarMark(
+                    x: .value("Day", item.date, unit: .day),
+                    y: .value("Steps", item.steps)
+                )
+                .foregroundStyle(item.steps >= 4000 ? Theme.green : Theme.muted)
+                .cornerRadius(4)
+            }
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .day)) { value in
+                    if let date = value.as(Date.self) {
+                        AxisValueLabel {
+                            Text(date.formatted(.dateTime.weekday(.narrow)))
+                                .font(.caption2)
+                        }
+                    }
+                }
+            }
+            .chartYAxis(.hidden)
+            .frame(height: 80)
         }
         .padding(16)
         .background(Theme.card)
@@ -169,17 +277,15 @@ struct CalendarView: View {
         }
     }
 
-    // MARK: - Weekly insight logic
+    // MARK: - Data loading
 
     private func loadOrGenerateInsight() {
-        // Show cached text immediately if it's from this calendar week
         if let text = UserDefaults.standard.string(forKey: insightTextKey),
            let date = UserDefaults.standard.object(forKey: insightDateKey) as? Date,
            isSameWeek(date, as: Date.now) {
             weeklyInsight = text
             return
         }
-        // Nothing fresh — generate
         generateInsight()
     }
 
@@ -201,12 +307,29 @@ struct CalendarView: View {
         }
     }
 
+    private func loadWeeklySteps() {
+        Task {
+            let data = await HealthKitService.shared.fetchWeeklySteps()
+            await MainActor.run { weeklySteps = data }
+        }
+    }
+
+    private func loadMissedDays() {
+        let loggedDates = Set(entries.map { calendar.startOfDay(for: $0.date) })
+        Task {
+            let missed = await HealthKitService.shared.findUnloggedMovedDays(
+                lookback: 7,
+                loggedDates: loggedDates
+            )
+            await MainActor.run { missedDays = missed }
+        }
+    }
+
     private func isSameWeek(_ a: Date, as b: Date) -> Bool {
         calendar.isDate(a, equalTo: b, toGranularity: .weekOfYear)
     }
 
     private func firstSentence(of text: String) -> String {
-        // Split on ". " or "." at end of string
         if let range = text.range(of: ".", options: .literal) {
             let end = text.index(after: range.lowerBound)
             return String(text[..<end])
@@ -282,6 +405,7 @@ struct DayCell: View {
 struct EntryDetailView: View {
     let entry: Entry
     @Environment(\.dismiss) private var dismiss
+    @State private var stats: DayStats? = nil
 
     private let activityLabels: [String: String] = [
         "walk": "🚶 Walk",
@@ -296,7 +420,6 @@ struct EntryDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Drag handle area
             Capsule()
                 .fill(Theme.muted)
                 .frame(width: 36, height: 4)
@@ -341,12 +464,61 @@ struct EntryDetailView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                 }
+
+                // HealthKit stats
+                if let s = stats {
+                    Divider()
+                        .padding(.horizontal, 24)
+
+                    HStack(spacing: 10) {
+                        StatPill(icon: "figure.walk", value: s.steps.formatted(), label: "steps")
+
+                        if let mins = s.workoutMinutes {
+                            StatPill(icon: "clock", value: "\(mins) min", label: s.workoutType ?? "workout")
+                        }
+
+                        if let cal = s.calories {
+                            StatPill(icon: "flame", value: "\(cal)", label: "cal")
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
             }
             .padding(.horizontal, 24)
+            .animation(.easeInOut(duration: 0.25), value: stats != nil)
 
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .task {
+            stats = await HealthKitService.shared.fetchStats(for: entry.date)
+        }
+    }
+}
+
+// MARK: - Stat Pill
+
+struct StatPill: View {
+    let icon: String
+    let value: String
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.semibold))
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Theme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 

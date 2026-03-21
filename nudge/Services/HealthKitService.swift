@@ -1,0 +1,319 @@
+import HealthKit
+
+// MARK: - Day statistics (for history detail + sync enrichment)
+
+struct DayStats {
+    let steps: Int
+    let workoutMinutes: Int?   // nil if no workout recorded
+    let calories: Int?          // active calories, nil if unavailable
+    let workoutType: String?    // e.g. "Outdoor Run"
+}
+
+// MARK: - HealthKit detection result
+
+struct HealthDetection {
+    /// Whether HealthKit data suggests the user moved today
+    let didMove: Bool
+    /// Best matching activity tag ("walk", "run") or nil if only step-based
+    let activityTag: String?
+    /// Human-readable summary for the UI banner e.g. "outdoor run detected"
+    let summary: String
+}
+
+// MARK: - HealthKitService
+
+final class HealthKitService {
+
+    static let shared = HealthKitService()
+    private let store = HKHealthStore()
+
+    // Step threshold below which we don't count as "moved"
+    private let stepThreshold: Double = 4_000
+
+    // Types we want to read
+    private var readTypes: Set<HKObjectType> {
+        var types: Set<HKObjectType> = [HKObjectType.workoutType()]
+        if let steps = HKObjectType.quantityType(forIdentifier: .stepCount) {
+            types.insert(steps)
+        }
+        if let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) {
+            types.insert(energy)
+        }
+        return types
+    }
+
+    // MARK: - Authorization
+
+    /// Returns true if authorization was granted (or already granted).
+    func requestAuthorization() async -> Bool {
+        guard HKHealthStore.isHealthDataAvailable() else { return false }
+        do {
+            try await store.requestAuthorization(toShare: [], read: readTypes)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    // MARK: - Today detection
+
+    /// Checks workouts first, falls back to step count.
+    /// Returns nil if HealthKit is unavailable or the user denied access.
+    func detectToday() async -> HealthDetection? {
+        guard HKHealthStore.isHealthDataAvailable() else { return nil }
+
+        // Try workouts first — they're richer
+        if let detection = await detectFromWorkouts() {
+            return detection
+        }
+
+        // Fall back to step count
+        return await detectFromSteps()
+    }
+
+    // MARK: - Workout query
+
+    private func detectFromWorkouts() async -> HealthDetection? {
+        let predicate = HKQuery.predicateForSamples(
+            withStart: Calendar.current.startOfDay(for: .now),
+            end: .now,
+            options: .strictStartDate
+        )
+        let sortDesc = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: .workoutType(),
+                predicate: predicate,
+                limit: 10,
+                sortDescriptors: [sortDesc]
+            ) { _, samples, _ in
+                guard let workouts = samples as? [HKWorkout], !workouts.isEmpty else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                // Pick the most significant workout
+                let best = workouts.max { a, b in
+                    a.duration < b.duration
+                } ?? workouts[0]
+
+                let (tag, label) = Self.classify(best.workoutActivityType)
+                continuation.resume(returning: HealthDetection(
+                    didMove: true,
+                    activityTag: tag,
+                    summary: label
+                ))
+            }
+            store.execute(query)
+        }
+    }
+
+    // MARK: - Step count query
+
+    private func detectFromSteps() async -> HealthDetection? {
+        guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
+            return nil
+        }
+        let predicate = HKQuery.predicateForSamples(
+            withStart: Calendar.current.startOfDay(for: .now),
+            end: .now,
+            options: .strictStartDate
+        )
+        return await withCheckedContinuation { continuation in
+            let query = HKStatisticsQuery(
+                quantityType: stepType,
+                quantitySamplePredicate: predicate,
+                options: .cumulativeSum
+            ) { _, stats, _ in
+                guard let sum = stats?.sumQuantity() else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                let steps = sum.doubleValue(for: .count())
+                guard steps >= self.stepThreshold else {
+                    continuation.resume(returning: HealthDetection(
+                        didMove: false,
+                        activityTag: nil,
+                        summary: "\(Int(steps)) steps today"
+                    ))
+                    return
+                }
+                continuation.resume(returning: HealthDetection(
+                    didMove: true,
+                    activityTag: "walk",
+                    summary: "\(Int(steps).formatted()) steps detected"
+                ))
+            }
+            store.execute(query)
+        }
+    }
+
+    // MARK: - Full day stats (for history detail + sync)
+
+    /// Fetches step count, workout duration, calories and workout type for any given date.
+    func fetchStats(for date: Date) async -> DayStats? {
+        guard HKHealthStore.isHealthDataAvailable() else { return nil }
+        let start = Calendar.current.startOfDay(for: date)
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start
+
+        async let steps = fetchSteps(from: start, to: end)
+        async let workout = fetchBestWorkout(from: start, to: end)
+
+        let stepCount = await steps
+        let bestWorkout = await workout
+
+        var workoutMinutes: Int? = nil
+        var calories: Int? = nil
+        var workoutType: String? = nil
+
+        if let w = bestWorkout {
+            workoutMinutes = Int(w.duration / 60)
+            workoutType = Self.workoutTypeName(w.workoutActivityType)
+            if let cal = w.statistics(for: HKQuantityType(.activeEnergyBurned))?
+                .sumQuantity()?.doubleValue(for: .kilocalorie()) {
+                calories = Int(cal)
+            }
+        }
+
+        return DayStats(
+            steps: stepCount,
+            workoutMinutes: workoutMinutes,
+            calories: calories,
+            workoutType: workoutType
+        )
+    }
+
+    private func fetchSteps(from start: Date, to end: Date) async -> Int {
+        guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return 0 }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+        return await withCheckedContinuation { continuation in
+            let query = HKStatisticsQuery(
+                quantityType: stepType,
+                quantitySamplePredicate: predicate,
+                options: .cumulativeSum
+            ) { _, stats, _ in
+                let count = stats?.sumQuantity()?.doubleValue(for: .count()) ?? 0
+                continuation.resume(returning: Int(count))
+            }
+            store.execute(query)
+        }
+    }
+
+    private func fetchBestWorkout(from start: Date, to end: Date) async -> HKWorkout? {
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+        let sortDesc = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: .workoutType(),
+                predicate: predicate,
+                limit: 10,
+                sortDescriptors: [sortDesc]
+            ) { _, samples, _ in
+                let workouts = samples as? [HKWorkout] ?? []
+                continuation.resume(returning: workouts.max { $0.duration < $1.duration })
+            }
+            store.execute(query)
+        }
+    }
+
+    // MARK: - Weekly step counts (for 7-day chart)
+
+    /// Returns step counts for each of the last 7 calendar days, oldest first.
+    func fetchWeeklySteps() async -> [(date: Date, steps: Int)] {
+        guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return [] }
+        let cal = Calendar.current
+        let now = Date.now
+        let anchorDate = cal.startOfDay(for: now)
+        guard let sevenDaysAgo = cal.date(byAdding: .day, value: -6, to: anchorDate) else { return [] }
+
+        let predicate = HKQuery.predicateForSamples(withStart: sevenDaysAgo, end: now, options: .strictStartDate)
+        let interval = DateComponents(day: 1)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKStatisticsCollectionQuery(
+                quantityType: stepType,
+                quantitySamplePredicate: predicate,
+                options: .cumulativeSum,
+                anchorDate: anchorDate,
+                intervalComponents: interval
+            )
+            query.initialResultsHandler = { _, results, _ in
+                guard let collection = results else { continuation.resume(returning: []); return }
+                var output: [(Date, Int)] = []
+                collection.enumerateStatistics(from: sevenDaysAgo, to: now) { stats, _ in
+                    let count = stats.sumQuantity()?.doubleValue(for: .count()) ?? 0
+                    output.append((stats.startDate, Int(count)))
+                }
+                continuation.resume(returning: output)
+            }
+            store.execute(query)
+        }
+    }
+
+    // MARK: - Unlogged moved days (for auto-fill prompt)
+
+    /// Returns dates (up to `lookback` days back) where HK shows movement but no Entry was logged.
+    func findUnloggedMovedDays(lookback: Int, loggedDates: Set<Date>) async -> [Date] {
+        guard HKHealthStore.isHealthDataAvailable() else { return [] }
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: .now)
+        var result: [Date] = []
+
+        for offset in 1...lookback {
+            guard let day = cal.date(byAdding: .day, value: -offset, to: today) else { continue }
+            guard !loggedDates.contains(day) else { continue }
+
+            let end = cal.date(byAdding: .day, value: 1, to: day) ?? day
+            async let steps = fetchSteps(from: day, to: end)
+            async let workout = fetchBestWorkout(from: day, to: end)
+
+            let s = await steps
+            let w = await workout
+            if s >= Int(stepThreshold) || w != nil {
+                result.append(day)
+            }
+        }
+        return result
+    }
+
+    // MARK: - Workout type → app tag
+
+    static func workoutTypeName(_ type: HKWorkoutActivityType) -> String {
+        switch type {
+        case .running, .trackAndField:          return "Outdoor Run"
+        case .walking:                           return "Walk"
+        case .hiking:                            return "Hike"
+        case .cycling, .handCycling:             return "Ride"
+        case .swimming, .swimBikeRun:            return "Swim"
+        case .yoga, .mindAndBody, .pilates:      return "Yoga"
+        case .highIntensityIntervalTraining:     return "HIIT"
+        case .functionalStrengthTraining,
+             .traditionalStrengthTraining:       return "Strength Training"
+        case .crossTraining:                     return "Cross Training"
+        case .dance, .barre, .kickboxing:        return "Dance"
+        default:                                  return "Workout"
+        }
+    }
+
+    private static func classify(_ type: HKWorkoutActivityType) -> (tag: String?, label: String) {
+        switch type {
+        case .running, .trackAndField:
+            return ("run", "run detected")
+        case .walking, .hiking:
+            return ("walk", "walk detected")
+        case .cycling, .handCycling:
+            return ("walk", "ride detected")
+        case .swimming, .swimBikeRun:
+            return ("run", "swim detected")
+        case .yoga, .mindAndBody, .pilates:
+            return ("walk", "yoga session detected")
+        case .highIntensityIntervalTraining, .functionalStrengthTraining,
+             .traditionalStrengthTraining, .crossTraining:
+            return ("run", "workout detected")
+        case .dance, .barre, .kickboxing:
+            return ("run", "dance session detected")
+        default:
+            return (nil, "activity detected")
+        }
+    }
+}
