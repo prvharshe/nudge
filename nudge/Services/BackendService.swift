@@ -22,6 +22,7 @@ enum BackendService {
             if let m = s.workoutMinutes { body["workoutMinutes"] = m }
             if let c = s.calories       { body["calories"] = c }
             if let t = s.workoutType    { body["workoutType"] = t }
+            if let sh = s.sleepHours    { body["sleepHours"] = sh }
         }
 
         var request = URLRequest(url: url)

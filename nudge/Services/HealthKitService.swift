@@ -7,6 +7,7 @@ struct DayStats {
     let workoutMinutes: Int?   // nil if no workout recorded
     let calories: Int?          // active calories, nil if unavailable
     let workoutType: String?    // e.g. "Outdoor Run"
+    let sleepHours: Double?    // total sleep the night before, nil if unavailable
 }
 
 // MARK: - HealthKit detection result
@@ -38,6 +39,9 @@ final class HealthKitService {
         }
         if let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) {
             types.insert(energy)
+        }
+        if let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) {
+            types.insert(sleep)
         }
         return types
     }
@@ -150,7 +154,7 @@ final class HealthKitService {
 
     // MARK: - Full day stats (for history detail + sync)
 
-    /// Fetches step count, workout duration, calories and workout type for any given date.
+    /// Fetches step count, workout duration, calories, workout type, and sleep for any given date.
     func fetchStats(for date: Date) async -> DayStats? {
         guard HKHealthStore.isHealthDataAvailable() else { return nil }
         let start = Calendar.current.startOfDay(for: date)
@@ -158,9 +162,11 @@ final class HealthKitService {
 
         async let steps = fetchSteps(from: start, to: end)
         async let workout = fetchBestWorkout(from: start, to: end)
+        async let sleep = fetchSleep(forNightBefore: date)
 
         let stepCount = await steps
         let bestWorkout = await workout
+        let sleepHours = await sleep
 
         var workoutMinutes: Int? = nil
         var calories: Int? = nil
@@ -179,8 +185,70 @@ final class HealthKitService {
             steps: stepCount,
             workoutMinutes: workoutMinutes,
             calories: calories,
-            workoutType: workoutType
+            workoutType: workoutType,
+            sleepHours: sleepHours
         )
+    }
+
+    // MARK: - Sleep query
+
+    /// Returns total hours of sleep for the night *before* the given date.
+    /// Window: 8 pm the previous evening → 11 am the given morning.
+    private func fetchSleep(forNightBefore date: Date) async -> Double? {
+        guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { return nil }
+        let cal = Calendar.current
+        let dayStart = cal.startOfDay(for: date)
+        // 16 hours before midnight = 8 pm the prior evening
+        guard let windowStart = cal.date(byAdding: .hour, value: -16, to: dayStart),
+              let windowEnd   = cal.date(byAdding: .hour, value:  11, to: dayStart) else { return nil }
+
+        let predicate = HKQuery.predicateForSamples(withStart: windowStart, end: windowEnd, options: .strictStartDate)
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: sleepType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [sort]
+            ) { _, samples, _ in
+                guard let samples = samples as? [HKCategorySample], !samples.isEmpty else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                // Count actual sleep stages (not inBed or awake)
+                let asleepValues: Set<Int> = [
+                    HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepREM.rawValue
+                ]
+
+                let asleep = samples.filter { asleepValues.contains($0.value) }
+                guard !asleep.isEmpty else { continuation.resume(returning: nil); return }
+
+                // Merge overlapping intervals (different sources can overlap)
+                var intervals = asleep.map { ($0.startDate, $0.endDate) }
+                intervals.sort { $0.0 < $1.0 }
+
+                var merged: [(Date, Date)] = [intervals[0]]
+                for iv in intervals.dropFirst() {
+                    let last = merged[merged.count - 1]
+                    if iv.0 <= last.1 {
+                        merged[merged.count - 1] = (last.0, max(last.1, iv.1))
+                    } else {
+                        merged.append(iv)
+                    }
+                }
+
+                let totalSeconds = merged.reduce(0.0) { $0 + $1.1.timeIntervalSince($1.0) }
+                let hours = totalSeconds / 3600
+                // Sanity-check: ignore anything under 30 min or over 14 hours
+                continuation.resume(returning: (0.5...14).contains(hours) ? hours : nil)
+            }
+            self.store.execute(query)
+        }
     }
 
     private func fetchSteps(from start: Date, to end: Date) async -> Int {

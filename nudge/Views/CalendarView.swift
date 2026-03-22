@@ -467,21 +467,39 @@ struct EntryDetailView: View {
 
                 // HealthKit stats
                 if let s = stats {
-                    Divider()
-                        .padding(.horizontal, 24)
+                    VStack(spacing: 10) {
+                        Divider()
+                            .padding(.horizontal, 24)
 
-                    HStack(spacing: 10) {
-                        StatPill(icon: "figure.walk", value: s.steps.formatted(), label: "steps")
+                        // Movement stats row
+                        HStack(spacing: 10) {
+                            StatPill(icon: "figure.walk", value: s.steps.formatted(), label: "steps")
 
-                        if let mins = s.workoutMinutes {
-                            StatPill(icon: "clock", value: "\(mins) min", label: s.workoutType ?? "workout")
+                            if let mins = s.workoutMinutes {
+                                StatPill(icon: "clock", value: "\(mins) min", label: s.workoutType ?? "workout")
+                            }
+
+                            if let cal = s.calories {
+                                StatPill(icon: "flame", value: "\(cal)", label: "cal")
+                            }
                         }
+                        .frame(maxWidth: .infinity)
 
-                        if let cal = s.calories {
-                            StatPill(icon: "flame", value: "\(cal)", label: "cal")
+                        // Sleep pill (separate row — clearly "night before")
+                        if let sleep = s.sleepHours {
+                            HStack(spacing: 6) {
+                                Image(systemName: "moon.zzz.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.purple)
+                                Text(String(format: "%.1f hrs sleep the night before", sleep))
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Theme.purple.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
                         }
                     }
-                    .frame(maxWidth: .infinity)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
