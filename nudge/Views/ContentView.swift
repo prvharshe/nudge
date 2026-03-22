@@ -250,21 +250,22 @@ struct TodayDoneView: View {
                             if streak.best > streak.current {
                                 Text("· best \(streak.best)")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(.orange.opacity(0.75))
                             }
                         }
                         .foregroundStyle(.orange)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 9)
-                        .background(Color.orange.opacity(colorScheme == .dark ? 0.20 : 0.10))
-                        .clipShape(Capsule())
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(Color.orange.opacity(0.35), lineWidth: 1))
                     }
 
                     // ── Step count ───────────────────────────────────────────────
                     if let steps = todaySteps, steps > 0 {
                         Text("\(steps.formatted()) steps today")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.primary)
+                            .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
                     }
 
                     // ── Activity chips (frosted) ─────────────────────────────────
@@ -272,7 +273,7 @@ struct TodayDoneView: View {
                         HStack(spacing: 8) {
                             ForEach(entry.activities, id: \.self) { tag in
                                 Text(activityLabels[tag] ?? tag)
-                                    .font(.subheadline)
+                                    .font(.subheadline.weight(.medium))
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 8)
                                     .background(.ultraThinMaterial, in: Capsule())
@@ -285,9 +286,10 @@ struct TodayDoneView: View {
                     if let note = entry.note, !note.isEmpty {
                         Text("\"\(note)\"")
                             .font(.subheadline.italic())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.primary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 24)
+                            .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
                     }
                 }
                 .padding(.horizontal, 20)
