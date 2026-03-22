@@ -19,8 +19,27 @@ function todayKey(userId) {
  * Cached per user per day to avoid burning Groq credits.
  * Pass refresh=true to bypass the cache (e.g. after fixing a bad nudge).
  */
+/**
+ * Build a human-readable recovery context string for Groq.
+ * Returns null if no data is available.
+ */
+function buildRecoveryContext(restingHR, hrv) {
+  const parts = [];
+  if (restingHR != null) {
+    const hr = Number(restingHR);
+    const label = hr > 90 ? 'significantly elevated' : hr > 80 ? 'mildly elevated' : hr >= 55 ? 'normal' : 'low / well-rested';
+    parts.push(`Resting HR: ${hr} BPM (${label})`);
+  }
+  if (hrv != null) {
+    const h = Number(hrv);
+    const label = h < 25 ? 'low — poor recovery' : h < 40 ? 'moderate' : 'good';
+    parts.push(`HRV: ${h}ms (${label})`);
+  }
+  return parts.length > 0 ? parts.join(', ') : null;
+}
+
 router.get('/', async (req, res) => {
-  const { userId, refresh, userName } = req.query;
+  const { userId, refresh, userName, restingHR, hrv } = req.query;
 
   if (!userId) {
     return res.status(400).json({ error: 'userId is required' });
@@ -33,7 +52,8 @@ router.get('/', async (req, res) => {
 
   try {
     const entries = await searchEntries(userId, 14);
-    const message = await generateNudge(entries, userName || 'friend');
+    const recoveryContext = buildRecoveryContext(restingHR, hrv);
+    const message = await generateNudge(entries, userName || 'friend', recoveryContext);
     cache.set(key, message);
     res.json({ message });
   } catch (err) {

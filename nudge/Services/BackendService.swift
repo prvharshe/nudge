@@ -23,6 +23,8 @@ enum BackendService {
             if let c = s.calories       { body["calories"] = c }
             if let t = s.workoutType    { body["workoutType"] = t }
             if let sh = s.sleepHours    { body["sleepHours"] = sh }
+            if let hr = s.restingHR     { body["restingHR"] = hr }
+            if let hv = s.hrv           { body["hrv"] = hv }
         }
 
         var request = URLRequest(url: url)
@@ -47,6 +49,12 @@ enum BackendService {
             urlString += "&userName=\(encoded)"
         }
         if refresh { urlString += "&refresh=true" }
+
+        // Attach today's recovery signal so Groq can adapt the nudge tone
+        let recovery = await HealthKitService.shared.fetchCurrentRecovery()
+        if let hr = recovery.restingHR { urlString += "&restingHR=\(hr)" }
+        if let hv = recovery.hrv       { urlString += "&hrv=\(hv)" }
+
         guard let url = URL(string: urlString) else {
             throw URLError(.badURL)
         }

@@ -8,6 +8,8 @@ struct DayStats {
     let calories: Int?          // active calories, nil if unavailable
     let workoutType: String?    // e.g. "Outdoor Run"
     let sleepHours: Double?    // total sleep the night before, nil if unavailable
+    let restingHR: Int?         // resting heart rate in BPM, nil if unavailable
+    let hrv: Int?               // HRV SDNN in milliseconds, nil if unavailable
 }
 
 // MARK: - HealthKit detection result
@@ -34,11 +36,12 @@ final class HealthKitService {
     // Types we want to read
     private var readTypes: Set<HKObjectType> {
         var types: Set<HKObjectType> = [HKObjectType.workoutType()]
-        if let steps = HKObjectType.quantityType(forIdentifier: .stepCount) {
-            types.insert(steps)
-        }
-        if let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) {
-            types.insert(energy)
+        let quantityIDs: [HKQuantityTypeIdentifier] = [
+            .stepCount, .activeEnergyBurned,
+            .restingHeartRate, .heartRateVariabilitySDNN
+        ]
+        for id in quantityIDs {
+            if let t = HKObjectType.quantityType(forIdentifier: id) { types.insert(t) }
         }
         if let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) {
             types.insert(sleep)
@@ -154,19 +157,27 @@ final class HealthKitService {
 
     // MARK: - Full day stats (for history detail + sync)
 
-    /// Fetches step count, workout duration, calories, workout type, and sleep for any given date.
+    /// Fetches step count, workout, sleep, resting HR and HRV for any given date.
     func fetchStats(for date: Date) async -> DayStats? {
         guard HKHealthStore.isHealthDataAvailable() else { return nil }
         let start = Calendar.current.startOfDay(for: date)
         let end = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start
 
-        async let steps = fetchSteps(from: start, to: end)
+        async let steps   = fetchSteps(from: start, to: end)
         async let workout = fetchBestWorkout(from: start, to: end)
-        async let sleep = fetchSleep(forNightBefore: date)
+        async let sleep   = fetchSleep(forNightBefore: date)
+        async let hr      = fetchLatestQuantity(.restingHeartRate,
+                                               unit: HKUnit.count().unitDivided(by: .minute()),
+                                               since: start)
+        async let hrv     = fetchLatestQuantity(.heartRateVariabilitySDNN,
+                                               unit: HKUnit.secondUnit(with: .milli),
+                                               since: start)
 
-        let stepCount = await steps
+        let stepCount  = await steps
         let bestWorkout = await workout
-        let sleepHours = await sleep
+        let sleepHours  = await sleep
+        let restingHR   = await hr.map { Int($0) }
+        let hrvVal      = await hrv.map { Int($0) }
 
         var workoutMinutes: Int? = nil
         var calories: Int? = nil
@@ -186,8 +197,46 @@ final class HealthKitService {
             workoutMinutes: workoutMinutes,
             calories: calories,
             workoutType: workoutType,
-            sleepHours: sleepHours
+            sleepHours: sleepHours,
+            restingHR: restingHR,
+            hrv: hrvVal
         )
+    }
+
+    // MARK: - Current recovery signal (for morning nudge)
+
+    /// Returns today's resting HR and HRV, searching the past 48 h if today has no data yet.
+    func fetchCurrentRecovery() async -> (restingHR: Int?, hrv: Int?) {
+        guard HKHealthStore.isHealthDataAvailable() else { return (nil, nil) }
+        let since = Date().addingTimeInterval(-48 * 3600)
+        async let hr  = fetchLatestQuantity(.restingHeartRate,
+                                            unit: HKUnit.count().unitDivided(by: .minute()),
+                                            since: since)
+        async let hrv = fetchLatestQuantity(.heartRateVariabilitySDNN,
+                                            unit: HKUnit.secondUnit(with: .milli),
+                                            since: since)
+        return (await hr.map { Int($0) }, await hrv.map { Int($0) })
+    }
+
+    // MARK: - Generic latest quantity helper
+
+    private func fetchLatestQuantity(
+        _ identifier: HKQuantityTypeIdentifier,
+        unit: HKUnit,
+        since: Date
+    ) async -> Double? {
+        guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { return nil }
+        let predicate = HKQuery.predicateForSamples(withStart: since, end: .now, options: .strictStartDate)
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: type, predicate: predicate, limit: 1, sortDescriptors: [sort]
+            ) { _, samples, _ in
+                let value = (samples as? [HKQuantitySample])?.first?.quantity.doubleValue(for: unit)
+                continuation.resume(returning: value)
+            }
+            self.store.execute(query)
+        }
     }
 
     // MARK: - Sleep query

@@ -16,7 +16,8 @@ Rules:
 - Zero guilt or pressure — this is purely supportive
 - Conversational tone, like a thoughtful friend who knows them well
 - Reference specific patterns you see across multiple entries (streaks, favourite activities, recurring notes)
-- End on a gentle, forward-looking note for today`;
+- End on a gentle, forward-looking note for today
+- RECOVERY SIGNAL: If a recovery signal is provided and shows elevated resting HR (>80 BPM) or low HRV (<30ms), soften the nudge — celebrate rest, suggest something gentle, or simply acknowledge their body needs recovery. Never push harder on a stressed-body day. If recovery looks good, you can be a little more energising.`;
 
 const COACH_SYSTEM_PROMPT = `You are a knowledgeable, warm personal movement coach with access to this person's complete movement history.
 Rules:
@@ -53,7 +54,7 @@ function sortEntriesByDate(entries) {
  * @param {string}   userName The user's first name (default: 'friend')
  * @returns {string}          The 2-sentence nudge message
  */
-export async function generateNudge(entries, userName = 'friend') {
+export async function generateNudge(entries, userName = 'friend', recoveryContext = null) {
   if (entries.length === 0) {
     return `Today is a great day to start tracking your movement, ${userName} — even a short walk counts. Check in tonight and I'll have something personal for you tomorrow morning.`;
   }
@@ -64,7 +65,11 @@ export async function generateNudge(entries, userName = 'friend') {
   const today = new Date().toDateString(); // e.g. "Thu Mar 13 2025"
   const context = sorted.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n');
 
-  const userPrompt = `Today's date: ${today}\n\nYou are writing for someone named ${userName}. Here are their recent movement entries, sorted newest first:\n\n${context}\n\nWrite their 2-sentence morning nudge for today. You may naturally use their name (${userName}) once if it feels right.`;
+  const recoveryLine = recoveryContext
+    ? `\nToday's recovery signal (from Apple Health): ${recoveryContext}`
+    : '';
+
+  const userPrompt = `Today's date: ${today}${recoveryLine}\n\nYou are writing for someone named ${userName}. Here are their recent movement entries, sorted newest first:\n\n${context}\n\nWrite their 2-sentence morning nudge for today. You may naturally use their name (${userName}) once if it feels right.`;
 
   const completion = await client().chat.completions.create({
     model: 'llama-3.1-8b-instant',

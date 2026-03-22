@@ -485,6 +485,19 @@ struct EntryDetailView: View {
                         }
                         .frame(maxWidth: .infinity)
 
+                        // Heart metrics row
+                        if s.restingHR != nil || s.hrv != nil {
+                            HStack(spacing: 10) {
+                                if let hr = s.restingHR {
+                                    StatPill(icon: "heart.fill", value: "\(hr) BPM", label: "resting HR")
+                                }
+                                if let hv = s.hrv {
+                                    StatPill(icon: "waveform.path.ecg", value: "\(hv)ms", label: "HRV")
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+
                         // Sleep pill (separate row — clearly "night before")
                         if let sleep = s.sleepHours {
                             HStack(spacing: 6) {
