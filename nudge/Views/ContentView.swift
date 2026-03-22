@@ -94,10 +94,12 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
+                // Reset daily repeating notifications (clears stale one-shots from prior days)
+                NotificationService.scheduleAll()
                 processPendingWidgetCheckIn()
-                // If today is already logged, cancel any pending follow-up reminder
+                // If today is already logged, swap the evening check-in for an encouraging nudge
                 if todayEntry != nil {
-                    NotificationService.cancelFollowUp()
+                    NotificationService.updateEveningForLoggedDay()
                 }
             }
         }

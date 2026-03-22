@@ -31,7 +31,7 @@ enum NotificationService {
 
     static func scheduleAll() {
         let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: ["evening-checkin", "morning-nudge"])
+        center.removePendingNotificationRequests(withIdentifiers: ["evening-checkin", "morning-nudge", "evening-logged"])
         scheduleEveningCheckIn(center: center)
         scheduleMorningNudge(center: center)
         scheduleFollowUp(center: center)
@@ -101,5 +101,36 @@ enum NotificationService {
     static func cancelFollowUp() {
         UNUserNotificationCenter.current()
             .removePendingNotificationRequests(withIdentifiers: ["follow-up-reminder"])
+    }
+
+    // MARK: - Swap evening notification when user has already logged today
+
+    /// Call this when the user has already logged for today.
+    /// Replaces the generic "log your movement" notification with an
+    /// encouraging one that points to the coach / morning nudge instead.
+    static func updateEveningForLoggedDay() {
+        let center = UNUserNotificationCenter.current()
+        // Remove the "please log" notification and follow-up
+        center.removePendingNotificationRequests(withIdentifiers: ["evening-checkin", "follow-up-reminder"])
+
+        // Schedule a one-shot replacement for tonight's slot (if it hasn't passed)
+        let cal = Calendar.current
+        var comps = cal.dateComponents([.year, .month, .day], from: Date.now)
+        comps.hour   = eveningMinutes / 60
+        comps.minute = eveningMinutes % 60
+        comps.second = 0
+        guard let fireDate = cal.date(from: comps), fireDate > Date.now else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Great work today 💪"
+        content.body  = "Check what your coach has to say."
+        content.sound = .default
+        content.userInfo = ["type": "nudge"]   // opens the morning nudge sheet
+
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: fireDate.timeIntervalSinceNow,
+            repeats: false
+        )
+        center.add(UNNotificationRequest(identifier: "evening-logged", content: content, trigger: trigger))
     }
 }
