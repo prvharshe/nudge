@@ -202,6 +202,76 @@ struct TodayDoneView: View {
 
     @Environment(\.colorScheme) private var colorScheme
 
+    @ViewBuilder
+    private var detailsCard: some View {
+        let hasDetails = streak.current > 0
+            || (todaySteps ?? 0) > 0
+            || !entry.activities.isEmpty
+            || !(entry.note?.isEmpty ?? true)
+        if hasDetails {
+            VStack(spacing: 14) {
+                // Streak row
+                if streak.current > 0 {
+                    HStack(spacing: 6) {
+                        Text("🔥")
+                        Text("\(streak.current) day streak")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.orange)
+                        if streak.best > streak.current {
+                            Text("· best \(streak.best)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                }
+                // Step count
+                if let steps = todaySteps, steps > 0 {
+                    HStack(spacing: 6) {
+                        Image(systemName: "figure.walk")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Theme.green)
+                        Text("\(steps.formatted()) steps today")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                    }
+                }
+                // Activity chips
+                if !entry.activities.isEmpty {
+                    HStack(spacing: 8) {
+                        ForEach(entry.activities, id: \.self) { tag in
+                            Text(activityLabels[tag] ?? tag)
+                                .font(.subheadline.weight(.medium))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 7)
+                                .background(accent.opacity(0.15), in: Capsule())
+                                .foregroundStyle(accent)
+                        }
+                        Spacer()
+                    }
+                }
+                // Note
+                if let note = entry.note, !note.isEmpty {
+                    HStack {
+                        Text("\"\(note)\"")
+                            .font(.subheadline.italic())
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.leading)
+                        Spacer()
+                    }
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.primary.opacity(0.07), lineWidth: 1)
+            )
+        }
+    }
+
     private var accentColor: Color {
         entry.didMove
             ? (colorScheme == .dark ? Color(hex: "52D990") : Theme.green)
@@ -233,7 +303,7 @@ struct TodayDoneView: View {
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
                             .fill(.ultraThinMaterial)
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .fill(accent.opacity(colorScheme == .dark ? 0.18 : 0.08))
+                            .fill(accent.opacity(colorScheme == .dark ? 0.18 : 0.12))
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                     .overlay(
@@ -241,56 +311,8 @@ struct TodayDoneView: View {
                             .stroke(accent.opacity(colorScheme == .dark ? 0.35 : 0.20), lineWidth: 1)
                     )
 
-                    // ── Streak ──────────────────────────────────────────────────
-                    if streak.current > 0 {
-                        HStack(spacing: 6) {
-                            Text("🔥")
-                            Text("\(streak.current) day streak")
-                                .font(.subheadline.weight(.semibold))
-                            if streak.best > streak.current {
-                                Text("· best \(streak.best)")
-                                    .font(.caption)
-                                    .foregroundStyle(.orange.opacity(0.75))
-                            }
-                        }
-                        .foregroundStyle(.orange)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 9)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().stroke(Color.orange.opacity(0.35), lineWidth: 1))
-                    }
-
-                    // ── Step count ───────────────────────────────────────────────
-                    if let steps = todaySteps, steps > 0 {
-                        Text("\(steps.formatted()) steps today")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.primary)
-                            .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
-                    }
-
-                    // ── Activity chips (frosted) ─────────────────────────────────
-                    if !entry.activities.isEmpty {
-                        HStack(spacing: 8) {
-                            ForEach(entry.activities, id: \.self) { tag in
-                                Text(activityLabels[tag] ?? tag)
-                                    .font(.subheadline.weight(.medium))
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 8)
-                                    .background(.ultraThinMaterial, in: Capsule())
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    }
-
-                    // ── Note ─────────────────────────────────────────────────────
-                    if let note = entry.note, !note.isEmpty {
-                        Text("\"\(note)\"")
-                            .font(.subheadline.italic())
-                            .foregroundStyle(.primary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 24)
-                            .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 1)
-                    }
+                    // ── Details card (streak + steps + chips + note) ─────────────
+                    detailsCard
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
