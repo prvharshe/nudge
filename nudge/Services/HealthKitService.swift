@@ -8,8 +8,8 @@ struct DayStats {
     let calories: Int?          // active calories, nil if unavailable
     let workoutType: String?    // e.g. "Outdoor Run"
     let sleepHours: Double?    // total sleep the night before, nil if unavailable
-    let restingHR: Int?         // resting heart rate in BPM, nil if unavailable
-    let hrv: Int?               // HRV SDNN in milliseconds, nil if unavailable
+    let restingHR: Int?         // resting heart rate in BPM for that day
+    let hrv: Int?               // HRV SDNN in milliseconds for that day
 }
 
 // MARK: - HealthKit detection result
@@ -166,18 +166,19 @@ final class HealthKitService {
         async let steps   = fetchSteps(from: start, to: end)
         async let workout = fetchBestWorkout(from: start, to: end)
         async let sleep   = fetchSleep(forNightBefore: date)
-        async let hr      = fetchLatestQuantity(.restingHeartRate,
-                                               unit: HKUnit.count().unitDivided(by: .minute()),
-                                               since: start)
-        async let hrv     = fetchLatestQuantity(.heartRateVariabilitySDNN,
-                                               unit: HKUnit.secondUnit(with: .milli),
-                                               since: start)
+        // Use day-scoped averages so each history entry shows its own HR/HRV
+        async let hr      = fetchDailyQuantity(.restingHeartRate,
+                                               unit: .count().unitDivided(by: .minute()),
+                                               from: start, to: end)
+        async let hrv     = fetchDailyQuantity(.heartRateVariabilitySDNN,
+                                               unit: .secondUnit(with: .milli),
+                                               from: start, to: end)
 
-        let stepCount  = await steps
+        let stepCount   = await steps
         let bestWorkout = await workout
         let sleepHours  = await sleep
         let restingHR   = await hr.map { Int($0) }
-        let hrvVal      = await hrv.map { Int($0) }
+        let hrvMs       = await hrv.map { Int($0) }
 
         var workoutMinutes: Int? = nil
         var calories: Int? = nil
@@ -199,7 +200,7 @@ final class HealthKitService {
             workoutType: workoutType,
             sleepHours: sleepHours,
             restingHR: restingHR,
-            hrv: hrvVal
+            hrv: hrvMs
         )
     }
 
@@ -218,7 +219,29 @@ final class HealthKitService {
         return (await hr.map { Int($0) }, await hrv.map { Int($0) })
     }
 
-    // MARK: - Generic latest quantity helper
+    // MARK: - Per-day average quantity (for history — scoped strictly to that calendar day)
+
+    private func fetchDailyQuantity(
+        _ identifier: HKQuantityTypeIdentifier,
+        unit: HKUnit,
+        from start: Date,
+        to end: Date
+    ) async -> Double? {
+        guard let quantityType = HKQuantityType.quantityType(forIdentifier: identifier) else { return nil }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+        return await withCheckedContinuation { continuation in
+            let query = HKStatisticsQuery(
+                quantityType: quantityType,
+                quantitySamplePredicate: predicate,
+                options: .discreteAverage
+            ) { _, stats, _ in
+                continuation.resume(returning: stats?.averageQuantity()?.doubleValue(for: unit))
+            }
+            store.execute(query)
+        }
+    }
+
+    // MARK: - Latest quantity helper (for live recovery signal — searches a broad window)
 
     private func fetchLatestQuantity(
         _ identifier: HKQuantityTypeIdentifier,
