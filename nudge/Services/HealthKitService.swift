@@ -219,23 +219,30 @@ final class HealthKitService {
         return (await hr.map { Int($0) }, await hrv.map { Int($0) })
     }
 
-    // MARK: - Per-day average quantity (for history — scoped strictly to that calendar day)
+    // MARK: - Per-day average quantity (for history — strictly scoped to that calendar day)
 
+    /// Uses HKSampleQuery (not HKStatisticsQuery) so the date predicate is always honoured.
     private func fetchDailyQuantity(
         _ identifier: HKQuantityTypeIdentifier,
         unit: HKUnit,
         from start: Date,
         to end: Date
     ) async -> Double? {
-        guard let quantityType = HKQuantityType.quantityType(forIdentifier: identifier) else { return nil }
+        guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { return nil }
         let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
         return await withCheckedContinuation { continuation in
-            let query = HKStatisticsQuery(
-                quantityType: quantityType,
-                quantitySamplePredicate: predicate,
-                options: .discreteAverage
-            ) { _, stats, _ in
-                continuation.resume(returning: stats?.averageQuantity()?.doubleValue(for: unit))
+            let query = HKSampleQuery(
+                sampleType: type,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: nil
+            ) { _, samples, _ in
+                guard let quantities = samples as? [HKQuantitySample], !quantities.isEmpty else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                let total = quantities.reduce(0.0) { $0 + $1.quantity.doubleValue(for: unit) }
+                continuation.resume(returning: total / Double(quantities.count))
             }
             store.execute(query)
         }
