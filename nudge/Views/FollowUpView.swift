@@ -10,7 +10,7 @@ struct FollowUpView: View {
 
     @Environment(\.modelContext) private var modelContext
 
-    private let chips: [(emoji: String, label: String, tag: String)] = [
+    private let defaultChips: [(emoji: String, label: String, tag: String)] = [
         ("🚶", "Walk", "walk"),
         ("🏃", "Run", "run"),
         ("😴", "Too tired", "tired"),
@@ -22,6 +22,7 @@ struct FollowUpView: View {
     @State private var isSaving = false
     @State private var showReaction = false
     @State private var reactionText: String? = nil
+    @State private var showAddActivity = false
     @FocusState private var noteFocused: Bool
 
     var body: some View {
@@ -53,24 +54,48 @@ struct FollowUpView: View {
             .padding(.top, 32)
             .padding(.bottom, 28)
 
-            // Activity chips
+            // Activity chips (default + custom + add button)
             FlowLayout(spacing: 10) {
-                ForEach(chips, id: \.tag) { chip in
+                ForEach(defaultChips, id: \.tag) { chip in
                     ChipButton(
                         emoji: chip.emoji,
                         label: chip.label,
                         isSelected: selectedTags.contains(chip.tag)
                     ) {
                         Haptics.impact(.light)
-                        if selectedTags.contains(chip.tag) {
-                            selectedTags.remove(chip.tag)
-                        } else {
-                            selectedTags.insert(chip.tag)
-                        }
+                        toggleTag(chip.tag)
                     }
                 }
+                ForEach(ActivityStore.shared.activities) { chip in
+                    ChipButton(
+                        emoji: chip.emoji,
+                        label: chip.label,
+                        isSelected: selectedTags.contains(chip.id)
+                    ) {
+                        Haptics.impact(.light)
+                        toggleTag(chip.id)
+                    }
+                }
+                // Add new activity
+                Button { showAddActivity = true } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "plus")
+                            .font(.caption.weight(.bold))
+                        Text("Add")
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Theme.card)
+                    .foregroundStyle(.secondary)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 24)
+            .sheet(isPresented: $showAddActivity) {
+                AddActivitySheet()
+            }
 
             // Note field
             TextField("Add a note... (optional)", text: $note)
@@ -113,6 +138,12 @@ struct FollowUpView: View {
         .onAppear {
             if let tag = preselectedTag { selectedTags.insert(tag) }
         }
+        // newline sentinel — keep sheet attached to the right parent
+    }
+
+    private func toggleTag(_ tag: String) {
+        if selectedTags.contains(tag) { selectedTags.remove(tag) }
+        else { selectedTags.insert(tag) }
     }
 
     private func save() {
@@ -240,6 +271,70 @@ struct FlowLayout: Layout {
     struct RowItem {
         let view: LayoutSubview
         let size: CGSize
+    }
+}
+
+// MARK: - Add Activity Sheet
+
+struct AddActivitySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var emoji = ""
+    @State private var label = ""
+    @FocusState private var labelFocused: Bool
+
+    private var canAdd: Bool { !label.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    HStack(spacing: 12) {
+                        TextField("🏋️", text: $emoji)
+                            .font(.title2)
+                            .frame(width: 44)
+                            .multilineTextAlignment(.center)
+
+                        Divider()
+
+                        TextField("e.g. Gym, Swim, Yoga…", text: $label)
+                            .focused($labelFocused)
+                            .submitLabel(.done)
+                            .onSubmit { if canAdd { commitAdd() } }
+                    }
+                    .padding(.vertical, 4)
+                } header: {
+                    Text("Activity name")
+                } footer: {
+                    Text("Type an emoji and a short name. Your new activity will appear in all check-in screens.")
+                }
+            }
+            .navigationTitle("New Activity")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundStyle(.secondary)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") { commitAdd() }
+                        .fontWeight(.semibold)
+                        .foregroundStyle(canAdd ? Theme.blue : .secondary)
+                        .disabled(!canAdd)
+                }
+            }
+        }
+        .presentationDetents([.height(260)])
+        .presentationDragIndicator(.visible)
+        .onAppear { labelFocused = true }
+    }
+
+    private func commitAdd() {
+        let e = emoji.trimmingCharacters(in: .whitespaces)
+        let l = label.trimmingCharacters(in: .whitespaces)
+        guard !l.isEmpty else { return }
+        ActivityStore.shared.add(emoji: e.isEmpty ? "⭐️" : e, label: l)
+        Haptics.success()
+        dismiss()
     }
 }
 

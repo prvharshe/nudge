@@ -64,9 +64,17 @@ enum BackendService {
         }
 
         // Attach today's recovery signal so Groq can adapt the nudge tone
-        let recovery = await HealthKitService.shared.fetchCurrentRecovery()
+        async let statsResult    = HealthKitService.shared.fetchStats(for: .now)
+        async let recoveryResult = HealthKitService.shared.fetchCurrentRecovery()
+        let (stats, recovery)    = await (statsResult, recoveryResult)
         if let hr = recovery.restingHR { urlString += "&restingHR=\(hr)" }
         if let hv = recovery.hrv       { urlString += "&hrv=\(hv)" }
+        let score = RecoveryScore.compute(
+            rhr:        recovery.restingHR,
+            hrv:        recovery.hrv,
+            sleepHours: stats?.sleepHours
+        )
+        if let s = score { urlString += "&recoveryScore=\(s.value)&recoveryLabel=\(s.label)" }
 
         guard let url = URL(string: urlString) else {
             throw URLError(.badURL)

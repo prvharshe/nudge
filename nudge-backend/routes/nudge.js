@@ -23,7 +23,7 @@ function todayKey(userId) {
  * Build a human-readable recovery context string for Groq.
  * Returns null if no data is available.
  */
-function buildRecoveryContext(restingHR, hrv) {
+function buildRecoveryContext(restingHR, hrv, recoveryScore, recoveryLabel) {
   const parts = [];
   if (restingHR != null) {
     const hr = Number(restingHR);
@@ -35,11 +35,14 @@ function buildRecoveryContext(restingHR, hrv) {
     const label = h < 25 ? 'low — poor recovery' : h < 40 ? 'moderate' : 'good';
     parts.push(`HRV: ${h}ms (${label})`);
   }
-  return parts.length > 0 ? parts.join(', ') : null;
+  if (recoveryScore != null && recoveryLabel != null) {
+    parts.push(`Overall readiness score: ${recoveryScore}/100 (${recoveryLabel})`);
+  }
+  return parts.length > 0 ? parts.join('. ') : null;
 }
 
 router.get('/', async (req, res) => {
-  const { userId, refresh, userName, restingHR, hrv, goal, profileSummary } = req.query;
+  const { userId, refresh, userName, restingHR, hrv, recoveryScore, recoveryLabel, goal, profileSummary } = req.query;
 
   if (!userId) {
     return res.status(400).json({ error: 'userId is required' });
@@ -52,7 +55,7 @@ router.get('/', async (req, res) => {
 
   try {
     const entries = await searchEntries(userId, 14);
-    const recoveryContext = buildRecoveryContext(restingHR, hrv);
+    const recoveryContext = buildRecoveryContext(restingHR, hrv, recoveryScore, recoveryLabel);
     const message = await generateNudge(entries, userName || 'friend', recoveryContext, goal || null, profileSummary || null);
     cache.set(key, message);
     res.json({ message });

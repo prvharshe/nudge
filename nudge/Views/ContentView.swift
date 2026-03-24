@@ -175,6 +175,7 @@ struct TodayDoneView: View {
     @Binding var showMorningNudge: Bool
     @Query private var allEntries: [Entry]
     @State private var todaySteps: Int? = nil
+    @State private var recoveryScore: RecoveryScore? = nil
 
     private let activityLabels: [String: String] = [
         "walk": "🚶 Walk",
@@ -283,6 +284,57 @@ struct TodayDoneView: View {
         }
     }
 
+    @ViewBuilder
+    private func recoveryScoreCard(_ score: RecoveryScore) -> some View {
+        HStack(spacing: 16) {
+            // Score number
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Recovery")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text("\(score.value)")
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .foregroundStyle(score.color)
+                    Text("/ 100")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            // Label pill + bar
+            VStack(alignment: .trailing, spacing: 8) {
+                Text(score.label)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(score.color)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(score.color.opacity(0.12), in: Capsule())
+
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.secondary.opacity(0.12))
+                            .frame(height: 6)
+                        Capsule()
+                            .fill(score.color.gradient)
+                            .frame(width: geo.size.width * CGFloat(score.value) / 100, height: 6)
+                    }
+                }
+                .frame(width: 110, height: 6)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(score.color.opacity(0.2), lineWidth: 1)
+        )
+    }
+
     private var accentColor: Color {
         entry.didMove
             ? (colorScheme == .dark ? Color(hex: "52D990") : Theme.green)
@@ -322,6 +374,11 @@ struct TodayDoneView: View {
                             .stroke(accent.opacity(colorScheme == .dark ? 0.35 : 0.20), lineWidth: 1)
                     )
 
+                    // ── Recovery score card ───────────────────────────────────────
+                    if let score = recoveryScore {
+                        recoveryScoreCard(score)
+                    }
+
                     // ── Details card (streak + steps + chips + note) ─────────────
                     detailsCard
                 }
@@ -332,8 +389,15 @@ struct TodayDoneView: View {
         }
         // ── Floating CTA ─────────────────────────────────────────────────────────
         .task {
-            let stats = await HealthKitService.shared.fetchStats(for: .now)
-            todaySteps = stats?.steps
+            async let statsResult    = HealthKitService.shared.fetchStats(for: .now)
+            async let recoveryResult = HealthKitService.shared.fetchCurrentRecovery()
+            let (stats, recovery)    = await (statsResult, recoveryResult)
+            todaySteps    = stats?.steps
+            recoveryScore = RecoveryScore.compute(
+                rhr:        recovery.restingHR,
+                hrv:        recovery.hrv,
+                sleepHours: stats?.sleepHours
+            )
         }
         .safeAreaInset(edge: .bottom) {
             Button {

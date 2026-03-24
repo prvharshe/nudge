@@ -16,6 +16,8 @@ struct SettingsView: View {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
+    @State private var showAddActivitySheet = false
+
     // Reset local data state
     @State private var showResetConfirm = false
     @State private var isResetting = false
@@ -74,6 +76,33 @@ struct SettingsView: View {
                     Text("Profile")
                 } footer: {
                     Text("Used to personalise calorie targets, protein goals, and AI suggestions.")
+                }
+
+                // MARK: - Custom activities section
+                Section {
+                    ForEach(ActivityStore.shared.activities) { activity in
+                        HStack(spacing: 10) {
+                            Text(activity.emoji).font(.title3)
+                            Text(activity.label)
+                        }
+                    }
+                    .onDelete { offsets in
+                        ActivityStore.shared.delete(atOffsets: offsets)
+                    }
+
+                    Button {
+                        showAddActivitySheet = true
+                    } label: {
+                        Label("Add activity", systemImage: "plus.circle")
+                            .foregroundStyle(Theme.blue)
+                    }
+                } header: {
+                    Text("Custom activities")
+                } footer: {
+                    Text("Appear alongside Walk, Run, Tired, and Busy when logging a check-in.")
+                }
+                .sheet(isPresented: $showAddActivitySheet) {
+                    AddActivitySheet()
                 }
 
                 // MARK: - Info section

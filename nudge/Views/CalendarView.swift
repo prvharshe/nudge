@@ -407,12 +407,18 @@ struct EntryDetailView: View {
     @State private var stats: DayStats? = nil
     @State private var showEditSheet = false
 
-    private let activityLabels: [String: String] = [
-        "walk": "🚶 Walk",
-        "run": "🏃 Run",
-        "tired": "😴 Too tired",
-        "busy": "💼 Busy day"
-    ]
+    private var activityLabels: [String: String] {
+        var labels: [String: String] = [
+            "walk": "🚶 Walk",
+            "run":  "🏃 Run",
+            "tired": "😴 Too tired",
+            "busy": "💼 Busy day"
+        ]
+        for a in ActivityStore.shared.activities {
+            labels[a.id] = "\(a.emoji) \(a.label)"
+        }
+        return labels
+    }
 
     private var emoji: String { entry.didMove ? "🙌" : "😴" }
     private var statusText: String { entry.didMove ? "Moved" : "Rest day" }
@@ -512,7 +518,7 @@ struct EditEntryView: View {
     @Bindable var entry: Entry
     @Environment(\.dismiss) private var dismiss
 
-    private let chips: [(emoji: String, label: String, tag: String)] = [
+    private let defaultChips: [(emoji: String, label: String, tag: String)] = [
         ("🚶", "Walk", "walk"),
         ("🏃", "Run", "run"),
         ("😴", "Too tired", "tired"),
@@ -523,6 +529,7 @@ struct EditEntryView: View {
     @State private var note = ""
     @State private var didMove = false
     @State private var isSaving = false
+    @State private var showAddActivity = false
     @FocusState private var noteFocused: Bool
 
     init(entry: Entry) {
@@ -589,20 +596,43 @@ struct EditEntryView: View {
                             .foregroundStyle(.secondary)
 
                         FlowLayout(spacing: 10) {
-                            ForEach(chips, id: \.tag) { chip in
+                            ForEach(defaultChips, id: \.tag) { chip in
                                 ChipButton(
                                     emoji: chip.emoji,
                                     label: chip.label,
                                     isSelected: selectedTags.contains(chip.tag)
                                 ) {
                                     Haptics.impact(.light)
-                                    if selectedTags.contains(chip.tag) {
-                                        selectedTags.remove(chip.tag)
-                                    } else {
-                                        selectedTags.insert(chip.tag)
-                                    }
+                                    toggleTag(chip.tag)
                                 }
                             }
+                            ForEach(ActivityStore.shared.activities) { chip in
+                                ChipButton(
+                                    emoji: chip.emoji,
+                                    label: chip.label,
+                                    isSelected: selectedTags.contains(chip.id)
+                                ) {
+                                    Haptics.impact(.light)
+                                    toggleTag(chip.id)
+                                }
+                            }
+                            Button { showAddActivity = true } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "plus")
+                                        .font(.caption.weight(.bold))
+                                    Text("Add")
+                                        .font(.subheadline.weight(.medium))
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .background(Theme.card)
+                                .foregroundStyle(.secondary)
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .sheet(isPresented: $showAddActivity) {
+                            AddActivitySheet()
                         }
                     }
 
@@ -644,6 +674,11 @@ struct EditEntryView: View {
             }
             .onTapGesture { noteFocused = false }
         }
+    }
+
+    private func toggleTag(_ tag: String) {
+        if selectedTags.contains(tag) { selectedTags.remove(tag) }
+        else { selectedTags.insert(tag) }
     }
 
     private func saveChanges() {
