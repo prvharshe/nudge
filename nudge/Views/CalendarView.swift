@@ -465,89 +465,25 @@ struct EntryDetailView: View {
                         .padding(.horizontal, 32)
                 }
 
-                // HealthKit stats
+                // HealthKit swipeable stat cards
                 if let s = stats {
-                    VStack(spacing: 10) {
+                    VStack(spacing: 6) {
                         Divider()
                             .padding(.horizontal, 24)
 
-                        // Movement stats row
-                        HStack(spacing: 10) {
-                            StatPill(icon: "figure.walk", value: s.steps.formatted(), label: "steps")
+                        TabView {
+                            StatCardMovement(s: s)
 
-                            if let mins = s.workoutMinutes {
-                                StatPill(icon: "clock", value: "\(mins) min", label: s.workoutType ?? "workout")
+                            if s.restingHR != nil || s.hrv != nil || s.sleepHours != nil {
+                                StatCardRecovery(s: s)
                             }
 
-                            if let cal = s.calories {
-                                StatPill(icon: "flame", value: "\(cal)", label: "cal")
+                            if s.foodCalories != nil || s.protein != nil {
+                                StatCardNutrition(s: s)
                             }
                         }
-                        .frame(maxWidth: .infinity)
-
-                        // Heart metrics row
-                        if s.restingHR != nil || s.hrv != nil {
-                            HStack(spacing: 10) {
-                                if let hr = s.restingHR {
-                                    StatPill(icon: "heart.fill", value: "\(hr) BPM", label: "resting HR")
-                                }
-                                if let hv = s.hrv {
-                                    StatPill(icon: "waveform.path.ecg", value: "\(hv)ms", label: "HRV")
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-
-                        // Nutrition row (from Health app)
-                        if s.foodCalories != nil || s.protein != nil {
-                            VStack(spacing: 6) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "fork.knife")
-                                        .font(.caption)
-                                        .foregroundStyle(Theme.green)
-                                    Text("Nutrition")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                    Spacer()
-                                    if let kcal = s.foodCalories {
-                                        Text("\(kcal) kcal")
-                                            .font(.caption.weight(.semibold))
-                                    }
-                                }
-                                if s.protein != nil || s.carbs != nil || s.fat != nil {
-                                    HStack(spacing: 10) {
-                                        if let p = s.protein {
-                                            MacroPill(label: "Protein", value: "\(p)g", color: Theme.blue)
-                                        }
-                                        if let c = s.carbs {
-                                            MacroPill(label: "Carbs", value: "\(c)g", color: Theme.green)
-                                        }
-                                        if let f = s.fat {
-                                            MacroPill(label: "Fat", value: "\(f)g", color: Theme.purple)
-                                        }
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                }
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(Theme.card, in: RoundedRectangle(cornerRadius: 12))
-                        }
-
-                        // Sleep pill (separate row — clearly "night before")
-                        if let sleep = s.sleepHours {
-                            HStack(spacing: 6) {
-                                Image(systemName: "moon.zzz.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(Theme.purple)
-                                Text(String(format: "%.1f hrs sleep the night before", sleep))
-                                    .font(.caption.weight(.medium))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(Theme.purple.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
-                        }
+                        .tabViewStyle(.page(indexDisplayMode: .automatic))
+                        .frame(height: 150)
                     }
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
@@ -564,48 +500,143 @@ struct EntryDetailView: View {
     }
 }
 
-// MARK: - Stat Pill
+// MARK: - Shared metric column (used inside swipeable stat cards)
 
-struct StatPill: View {
-    let icon: String
+private struct MetricColumn: View {
     let value: String
     let label: String
+    var color: Color = .primary
 
     var body: some View {
         VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.caption)
-                .foregroundStyle(.secondary)
             Text(value)
-                .font(.caption.weight(.semibold))
+                .font(.title3.weight(.bold))
+                .foregroundStyle(color)
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Theme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .frame(maxWidth: .infinity)
     }
 }
 
-struct MacroPill: View {
-    let label: String
-    let value: String
-    let color: Color
+// MARK: - Movement card
+
+private struct StatCardMovement: View {
+    let s: DayStats
 
     var body: some View {
-        VStack(spacing: 2) {
-            Text(value)
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Movement", systemImage: "figure.walk.circle.fill")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(color)
-            Text(label)
-                .font(.caption2)
                 .foregroundStyle(.secondary)
+
+            HStack(spacing: 0) {
+                MetricColumn(
+                    value: s.steps > 0 ? s.steps.formatted() : "—",
+                    label: "steps",
+                    color: Theme.green
+                )
+                if let mins = s.workoutMinutes {
+                    Divider().frame(height: 36)
+                    MetricColumn(
+                        value: "\(mins) min",
+                        label: s.workoutType ?? "workout",
+                        color: Theme.blue
+                    )
+                }
+                if let cal = s.calories {
+                    Divider().frame(height: 36)
+                    MetricColumn(value: "\(cal)", label: "active cal", color: .orange)
+                }
+            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(color.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+        .padding(16)
+        .padding(.bottom, 20) // room for page dots
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 24)
+    }
+}
+
+// MARK: - Recovery card
+
+private struct StatCardRecovery: View {
+    let s: DayStats
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Recovery", systemImage: "heart.circle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 0) {
+                if let hr = s.restingHR {
+                    MetricColumn(value: "\(hr)", label: "resting HR", color: .red)
+                }
+                if let hv = s.hrv {
+                    if s.restingHR != nil { Divider().frame(height: 36) }
+                    MetricColumn(value: "\(hv)ms", label: "HRV", color: Theme.purple)
+                }
+                if let sleep = s.sleepHours {
+                    if s.restingHR != nil || s.hrv != nil { Divider().frame(height: 36) }
+                    MetricColumn(
+                        value: String(format: "%.1fh", sleep),
+                        label: "sleep",
+                        color: Theme.purple
+                    )
+                }
+            }
+        }
+        .padding(16)
+        .padding(.bottom, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 24)
+    }
+}
+
+// MARK: - Nutrition card
+
+private struct StatCardNutrition: View {
+    let s: DayStats
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Nutrition", systemImage: "fork.knife.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if let kcal = s.foodCalories {
+                    Text("\(kcal) kcal")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.primary)
+                }
+            }
+
+            HStack(spacing: 0) {
+                if let p = s.protein {
+                    MetricColumn(value: "\(p)g", label: "protein", color: Theme.blue)
+                }
+                if let c = s.carbs {
+                    if s.protein != nil { Divider().frame(height: 36) }
+                    MetricColumn(value: "\(c)g", label: "carbs", color: Theme.green)
+                }
+                if let f = s.fat {
+                    if s.protein != nil || s.carbs != nil { Divider().frame(height: 36) }
+                    MetricColumn(value: "\(f)g", label: "fat", color: Theme.purple)
+                }
+            }
+        }
+        .padding(16)
+        .padding(.bottom, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 24)
     }
 }
 
