@@ -10,6 +10,13 @@ struct OnboardingView: View {
     @State private var selectedGoal: UserGoal? = nil
     @FocusState private var nameFocused: Bool
 
+    // Profile step
+    @State private var selectedSex: UserSex? = nil
+    @State private var ageInput    = ""
+    @State private var heightInput = ""
+    @State private var weightInput = ""
+    @State private var selectedActivity: ActivityLevel? = nil
+
     var body: some View {
         ZStack {
             switch step {
@@ -27,6 +34,12 @@ struct OnboardingView: View {
                     ))
             case .goal:
                 goalScreen
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing),
+                        removal: .move(edge: .leading)
+                    ))
+            case .profile:
+                profileScreen
                     .transition(.asymmetric(
                         insertion: .move(edge: .trailing),
                         removal: .move(edge: .leading)
@@ -220,7 +233,7 @@ struct OnboardingView: View {
                 guard let goal = selectedGoal else { return }
                 Haptics.impact(.medium)
                 userGoal = goal.rawValue
-                withAnimation(.easeInOut(duration: 0.35)) { step = .notifications }
+                withAnimation(.easeInOut(duration: 0.35)) { step = .profile }
             } label: {
                 Text("Continue →")
                     .font(.system(.body, design: .rounded).weight(.semibold))
@@ -236,7 +249,161 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Step 4: Notifications
+    // MARK: - Step 4: Profile
+
+    private var profileScreen: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 0) {
+                Spacer().frame(height: 32)
+
+                VStack(spacing: 26) {
+                    // Header
+                    VStack(spacing: 12) {
+                        Text("👤")
+                            .font(.system(size: 60))
+                        VStack(spacing: 8) {
+                            Text("A bit about you")
+                                .font(.system(size: 26, weight: .bold, design: .rounded))
+                            Text("Helps me give accurate calorie, protein, and nutrition targets.")
+                                .font(.system(.subheadline, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+
+                    // Biological sex
+                    VStack(alignment: .leading, spacing: 8) {
+                        ProfileSectionLabel("Biological sex")
+                        HStack(spacing: 8) {
+                            ForEach(UserSex.allCases, id: \.rawValue) { s in
+                                Button {
+                                    Haptics.impact(.light)
+                                    selectedSex = s
+                                } label: {
+                                    Text(s.title)
+                                        .font(.system(.subheadline, design: .rounded).weight(.medium))
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 12)
+                                        .background(selectedSex == s
+                                                    ? Theme.blue.opacity(0.1) : Theme.card)
+                                        .foregroundStyle(selectedSex == s ? Theme.blue : .primary)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .strokeBorder(selectedSex == s
+                                                              ? Theme.blue : Color.clear,
+                                                              lineWidth: 2)
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+
+                    // Age / Height / Weight row
+                    VStack(alignment: .leading, spacing: 8) {
+                        ProfileSectionLabel("Body stats")
+                        HStack(spacing: 10) {
+                            ProfileField(label: "Age",    placeholder: "28",  unit: "yrs", text: $ageInput,    keyboard: .numberPad)
+                            ProfileField(label: "Height", placeholder: "175", unit: "cm",  text: $heightInput, keyboard: .numberPad)
+                            ProfileField(label: "Weight", placeholder: "78",  unit: "kg",  text: $weightInput, keyboard: .decimalPad)
+                        }
+                    }
+
+                    // Activity level
+                    VStack(alignment: .leading, spacing: 8) {
+                        ProfileSectionLabel("Lifestyle activity")
+                        VStack(spacing: 8) {
+                            ForEach(ActivityLevel.allCases, id: \.rawValue) { level in
+                                Button {
+                                    Haptics.impact(.light)
+                                    selectedActivity = level
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Text(level.emoji).font(.title3)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(level.title)
+                                                .font(.system(.subheadline, design: .rounded).weight(.medium))
+                                                .foregroundStyle(.primary)
+                                            Text(level.subtitle)
+                                                .font(.system(.caption, design: .rounded))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        if selectedActivity == level {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundStyle(Theme.blue)
+                                        }
+                                    }
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 10)
+                                    .background(selectedActivity == level
+                                                ? Theme.blue.opacity(0.08) : Theme.card)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .strokeBorder(selectedActivity == level
+                                                          ? Theme.blue : Color.clear,
+                                                          lineWidth: 1.5)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 28)
+
+                Spacer().frame(height: 32)
+
+                VStack(spacing: 12) {
+                    Button {
+                        saveProfile()
+                        Haptics.impact(.medium)
+                        withAnimation(.easeInOut(duration: 0.35)) { step = .notifications }
+                    } label: {
+                        Text("Continue →")
+                            .font(.system(.body, design: .rounded).weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                            .background(Theme.blue)
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                    }
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.35)) { step = .notifications }
+                    } label: {
+                        Text("Skip for now")
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 48)
+            }
+        }
+    }
+
+    private func saveProfile() {
+        if let s = selectedSex {
+            UserDefaults.standard.set(s.rawValue, forKey: "nudge.sex")
+        }
+        if let a = Int(ageInput.trimmingCharacters(in: .whitespaces)), a > 0 {
+            UserDefaults.standard.set(a, forKey: "nudge.age")
+        }
+        if let h = Double(heightInput.trimmingCharacters(in: .whitespaces)), h > 0 {
+            UserDefaults.standard.set(h, forKey: "nudge.heightCm")
+        }
+        if let w = Double(weightInput.trimmingCharacters(in: .whitespaces)), w > 0 {
+            UserDefaults.standard.set(w, forKey: "nudge.weightKg")
+        }
+        if let al = selectedActivity {
+            UserDefaults.standard.set(al.rawValue, forKey: "nudge.activityLevel")
+        }
+    }
+
+    // MARK: - Step 5: Notifications
 
     private var notificationsScreen: some View {
         VStack(spacing: 0) {
@@ -342,12 +509,60 @@ private struct NotificationPreviewRow: View {
     }
 }
 
+// MARK: - Profile helper views
+
+private struct ProfileSectionLabel: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        Text(text)
+            .font(.system(.caption, design: .rounded).weight(.semibold))
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+            .kerning(0.5)
+    }
+}
+
+private struct ProfileField: View {
+    let label: String
+    let placeholder: String
+    let unit: String
+    @Binding var text: String
+    let keyboard: UIKeyboardType
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.system(.caption2, design: .rounded).weight(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .kerning(0.4)
+            HStack(spacing: 3) {
+                TextField(placeholder, text: $text)
+                    .keyboardType(keyboard)
+                    .font(.system(.body, design: .rounded).weight(.semibold))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                Text(unit)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 12)
+            .padding(.horizontal, 8)
+            .background(Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
 // MARK: - Step enum
 
 private enum OnboardingStep {
     case splash
     case name
     case goal
+    case profile
     case notifications
 }
 

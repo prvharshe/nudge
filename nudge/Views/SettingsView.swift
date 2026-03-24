@@ -8,6 +8,14 @@ struct SettingsView: View {
 
     @AppStorage("nudge.userGoal") private var userGoal = ""
 
+    private var profileSummarySnippet: String? {
+        var parts: [String] = []
+        if let s = UserProfile.sex { parts.append(s.title) }
+        if let a = UserProfile.age { parts.append("\(a) yrs") }
+        if let w = UserProfile.weightKg { parts.append(String(format: "%.0fkg", w)) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     // Reset local data state
     @State private var showResetConfirm = false
     @State private var isResetting = false
@@ -44,6 +52,28 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Your goal")
+                }
+
+                // MARK: - Profile section
+                Section {
+                    NavigationLink {
+                        EditProfileView()
+                    } label: {
+                        HStack {
+                            Label("Edit profile", systemImage: "person.circle")
+                            Spacer()
+                            if let summary = profileSummarySnippet, !summary.isEmpty {
+                                Text(summary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Profile")
+                } footer: {
+                    Text("Used to personalise calorie targets, protein goals, and AI suggestions.")
                 }
 
                 // MARK: - Info section
@@ -270,6 +300,141 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Edit Profile View
+
+struct EditProfileView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var selectedSex      = UserProfile.sex
+    @State private var ageText          = UserProfile.age.map { String($0) } ?? ""
+    @State private var heightText       = UserProfile.heightCm.map { String(format: "%.0f", $0) } ?? ""
+    @State private var weightText       = UserProfile.weightKg.map { String(format: "%.1f", $0) } ?? ""
+    @State private var selectedActivity = UserProfile.activityLevel
+
+    var body: some View {
+        List {
+            // Sex
+            Section("Biological sex") {
+                HStack(spacing: 10) {
+                    ForEach(UserSex.allCases, id: \.rawValue) { s in
+                        Button {
+                            selectedSex = s
+                            UserDefaults.standard.set(s.rawValue, forKey: "nudge.sex")
+                        } label: {
+                            Text(s.title)
+                                .font(.subheadline.weight(.medium))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(selectedSex == s ? Theme.blue.opacity(0.1) : Theme.card)
+                                .foregroundStyle(selectedSex == s ? Theme.blue : .primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .strokeBorder(selectedSex == s ? Theme.blue : Color.clear, lineWidth: 1.5)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+            }
+
+            // Body stats
+            Section("Body stats") {
+                HStack {
+                    Text("Age")
+                    Spacer()
+                    TextField("28", text: $ageText)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .onChange(of: ageText) { _, v in
+                            if let a = Int(v), a > 0 { UserDefaults.standard.set(a, forKey: "nudge.age") }
+                        }
+                    Text("yrs").foregroundStyle(.secondary)
+                }
+                HStack {
+                    Text("Height")
+                    Spacer()
+                    TextField("175", text: $heightText)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .onChange(of: heightText) { _, v in
+                            if let h = Double(v), h > 0 { UserDefaults.standard.set(h, forKey: "nudge.heightCm") }
+                        }
+                    Text("cm").foregroundStyle(.secondary)
+                }
+                HStack {
+                    Text("Weight")
+                    Spacer()
+                    TextField("78", text: $weightText)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .onChange(of: weightText) { _, v in
+                            if let w = Double(v), w > 0 { UserDefaults.standard.set(w, forKey: "nudge.weightKg") }
+                        }
+                    Text("kg").foregroundStyle(.secondary)
+                }
+            }
+
+            // Activity level
+            Section("Lifestyle activity") {
+                ForEach(ActivityLevel.allCases, id: \.rawValue) { level in
+                    Button {
+                        selectedActivity = level
+                        UserDefaults.standard.set(level.rawValue, forKey: "nudge.activityLevel")
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text(level.emoji)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(level.title).font(.body).foregroundStyle(.primary)
+                                Text(level.subtitle).font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if selectedActivity == level {
+                                Image(systemName: "checkmark").foregroundStyle(Theme.blue)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            // Computed targets (read-only preview)
+            if UserProfile.bmi != nil || UserProfile.tdee != nil {
+                Section("Estimated targets") {
+                    if let bmi = UserProfile.bmi {
+                        HStack {
+                            Text("BMI")
+                            Spacer()
+                            Text(String(format: "%.1f", bmi))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    if let tdee = UserProfile.tdee {
+                        HStack {
+                            Text("Daily calorie need")
+                            Spacer()
+                            Text(String(format: "%.0f kcal", tdee))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    if let protein = UserProfile.proteinTargetG {
+                        HStack {
+                            Text("Protein target")
+                            Spacer()
+                            Text("\(protein)g / day")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Your profile")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

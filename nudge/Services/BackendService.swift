@@ -57,6 +57,12 @@ enum BackendService {
         let userGoal = UserDefaults.standard.string(forKey: "nudge.userGoal") ?? ""
         if !userGoal.isEmpty { urlString += "&goal=\(userGoal)" }
 
+        let profile = UserProfile.summary
+        if !profile.isEmpty,
+           let encoded = profile.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+            urlString += "&profileSummary=\(encoded)"
+        }
+
         // Attach today's recovery signal so Groq can adapt the nudge tone
         let recovery = await HealthKitService.shared.fetchCurrentRecovery()
         if let hr = recovery.restingHR { urlString += "&restingHR=\(hr)" }
@@ -92,6 +98,8 @@ enum BackendService {
             "history": history
         ]
         if !goal.isEmpty { body["goal"] = goal }
+        let coachProfile = UserProfile.summary
+        if !coachProfile.isEmpty { body["profileSummary"] = coachProfile }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -122,6 +130,8 @@ enum BackendService {
             "activities": activities
         ]
         if !goal.isEmpty { body["goal"] = goal }
+        let reactionProfile = UserProfile.summary
+        if !reactionProfile.isEmpty { body["profileSummary"] = reactionProfile }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -148,6 +158,8 @@ enum BackendService {
         let goal = UserDefaults.standard.string(forKey: "nudge.userGoal") ?? ""
         var body: [String: Any] = ["userId": UserService.userId]
         if !goal.isEmpty { body["goal"] = goal }
+        let weeklyProfile = UserProfile.summary
+        if !weeklyProfile.isEmpty { body["profileSummary"] = weeklyProfile }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

@@ -73,7 +73,7 @@ function goalLabel(goal) {
  * @param {string}   userName The user's first name (default: 'friend')
  * @returns {string}          The 2-sentence nudge message
  */
-export async function generateNudge(entries, userName = 'friend', recoveryContext = null, goal = null) {
+export async function generateNudge(entries, userName = 'friend', recoveryContext = null, goal = null, profileSummary = null) {
   if (entries.length === 0) {
     return `Today is a great day to start tracking your movement, ${userName} — even a short walk counts. Check in tonight and I'll have something personal for you tomorrow morning.`;
   }
@@ -88,8 +88,9 @@ export async function generateNudge(entries, userName = 'friend', recoveryContex
     ? `\nToday's recovery signal (from Apple Health): ${recoveryContext}`
     : '';
   const goalContext = goalLine(goal);
+  const profileLine = profileSummary ? `\n${profileSummary}` : '';
 
-  const userPrompt = `Today's date: ${today}${recoveryLine}${goalContext}\n\nYou are writing for someone named ${userName}. Here are their recent movement entries, sorted newest first:\n\n${context}\n\nWrite their 2-sentence morning nudge for today. You may naturally use their name (${userName}) once if it feels right.`;
+  const userPrompt = `Today's date: ${today}${recoveryLine}${goalContext}${profileLine}\n\nYou are writing for someone named ${userName}. Here are their recent movement entries, sorted newest first:\n\n${context}\n\nWrite their 2-sentence morning nudge for today. You may naturally use their name (${userName}) once if it feels right.`;
 
   const completion = await client().chat.completions.create({
     model: 'llama-3.1-8b-instant',
@@ -113,12 +114,13 @@ export async function generateNudge(entries, userName = 'friend', recoveryContex
  * @param {Array<{role: string, content: string}>} history  Recent conversation turns (oldest first)
  * @returns {string}          The coach's answer
  */
-export async function generateCoachAnswer(entries, question, history = [], goal = null) {
+export async function generateCoachAnswer(entries, question, history = [], goal = null, profileSummary = null) {
   const context = entries.length > 0
     ? entries.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n')
     : 'No movement history stored yet.';
 
-  const systemWithContext = `${COACH_SYSTEM_PROMPT}${goalLine(goal)}\n\nMovement history context (most relevant entries first):\n${context}`;
+  const profileLine = profileSummary ? `\n${profileSummary}` : '';
+  const systemWithContext = `${COACH_SYSTEM_PROMPT}${goalLine(goal)}${profileLine}\n\nMovement history context (most relevant entries first):\n${context}`;
 
   const messages = [
     { role: 'system', content: systemWithContext },
@@ -162,7 +164,7 @@ Rules:
  * @param {string[]} activities  Activity tags logged (e.g. ["walk","run"])
  * @returns {string}  One-sentence reaction
  */
-export async function generateReaction(entries, didMove, activities, goal = null) {
+export async function generateReaction(entries, didMove, activities, goal = null, profileSummary = null) {
   const context = entries.length > 0
     ? entries.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n')
     : 'No prior history yet.';
@@ -171,8 +173,9 @@ export async function generateReaction(entries, didMove, activities, goal = null
     ? `They just logged movement today${activities.length ? ` (${activities.join(', ')})` : ''}.`
     : "They just logged a rest day today.";
 
-  const goalCtx = goal ? `\nThis person's goal: ${goalLabel(goal)}.` : '';
-  const userPrompt = `Recent history:\n${context}\n\n${todayDesc}${goalCtx}\n\nWrite your one-sentence reaction.`;
+  const goalCtx    = goal          ? `\nThis person's goal: ${goalLabel(goal)}.`  : '';
+  const profileCtx = profileSummary ? `\n${profileSummary}` : '';
+  const userPrompt = `Recent history:\n${context}\n\n${todayDesc}${goalCtx}${profileCtx}\n\nWrite your one-sentence reaction.`;
 
   const completion = await client().chat.completions.create({
     model: 'llama-3.1-8b-instant',
@@ -194,14 +197,15 @@ export async function generateReaction(entries, didMove, activities, goal = null
  * @param {string[]} entries  Up to 30 recent entries
  * @returns {string}  The weekly insight text
  */
-export async function generateWeeklyInsight(entries, goal = null) {
+export async function generateWeeklyInsight(entries, goal = null, profileSummary = null) {
   if (entries.length === 0) {
     return "You haven't logged any entries yet — start checking in each evening and I'll have a real pattern analysis for you next week.";
   }
 
   const context = entries.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n');
-  const goalCtx = goal ? `\nThis person's fitness goal: ${goalLabel(goal)}.` : '';
-  const userPrompt = `Here are this person's recent movement entries (newest first):\n\n${context}${goalCtx}\n\nWrite their 3-sentence weekly pattern analysis.`;
+  const goalCtx    = goal           ? `\nThis person's fitness goal: ${goalLabel(goal)}.` : '';
+  const profileCtx = profileSummary ? `\n${profileSummary}` : '';
+  const userPrompt = `Here are this person's recent movement entries (newest first):\n\n${context}${goalCtx}${profileCtx}\n\nWrite their 3-sentence weekly pattern analysis.`;
 
   const completion = await client().chat.completions.create({
     model: 'llama-3.1-8b-instant',

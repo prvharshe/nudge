@@ -13,7 +13,7 @@ const router = express.Router();
  * so the most *relevant* entries (not just most recent) inform the answer.
  */
 router.post('/', async (req, res) => {
-  const { userId, question, history, goal } = req.body;
+  const { userId, question, history, goal, profileSummary } = req.body;
 
   if (!userId || !question?.trim()) {
     return res.status(400).json({ error: 'userId and question are required' });
@@ -27,7 +27,7 @@ router.post('/', async (req, res) => {
   try {
     // Semantic search: use the question itself as the query to surface relevant entries
     const entries = await searchEntries(userId, 20, question.trim());
-    const answer = await generateCoachAnswer(entries, question.trim(), conversationHistory, goal || null);
+    const answer = await generateCoachAnswer(entries, question.trim(), conversationHistory, goal || null, profileSummary || null);
     res.json({ answer });
   } catch (err) {
     console.error('coach error:', err.message);
