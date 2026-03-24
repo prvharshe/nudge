@@ -68,9 +68,13 @@ struct ContentView: View {
                 .tabItem { Label("History", systemImage: "calendar") }
                 .tag(1)
 
+            TrendsView()
+                .tabItem { Label("Trends", systemImage: "chart.line.uptrend.xyaxis") }
+                .tag(2)
+
             CoachView()
                 .tabItem { Label("Coach", systemImage: "brain") }
-                .tag(2)
+                .tag(3)
         }
         .sheet(isPresented: $showMorningNudge) {
             MorningNudgeView()

@@ -481,6 +481,159 @@ final class HealthKitService {
         }
     }
 
+    // MARK: - Trend data (for Trends tab)
+
+    /// Daily step totals for the last `days` calendar days, oldest-first.
+    func fetchStepHistory(days: Int) async -> [(date: Date, steps: Int)] {
+        guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return [] }
+        let cal = Calendar.current
+        let anchor = cal.startOfDay(for: .now)
+        guard let start = cal.date(byAdding: .day, value: -(days - 1), to: anchor) else { return [] }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: .now, options: .strictStartDate)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKStatisticsCollectionQuery(
+                quantityType: stepType,
+                quantitySamplePredicate: predicate,
+                options: .cumulativeSum,
+                anchorDate: anchor,
+                intervalComponents: DateComponents(day: 1)
+            )
+            query.initialResultsHandler = { _, results, _ in
+                guard let col = results else { continuation.resume(returning: []); return }
+                var out: [(Date, Int)] = []
+                col.enumerateStatistics(from: start, to: .now) { stats, _ in
+                    let count = stats.sumQuantity()?.doubleValue(for: .count()) ?? 0
+                    out.append((stats.startDate, Int(count)))
+                }
+                continuation.resume(returning: out)
+            }
+            store.execute(query)
+        }
+    }
+
+    /// Daily average resting heart rate for the last `days` days, oldest-first.
+    func fetchRHRHistory(days: Int) async -> [(date: Date, rhr: Int)] {
+        guard let hrType = HKQuantityType.quantityType(forIdentifier: .restingHeartRate) else { return [] }
+        let cal = Calendar.current
+        let anchor = cal.startOfDay(for: .now)
+        guard let start = cal.date(byAdding: .day, value: -(days - 1), to: anchor) else { return [] }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: .now, options: .strictStartDate)
+        let unit = HKUnit.count().unitDivided(by: .minute())
+
+        return await withCheckedContinuation { continuation in
+            let query = HKStatisticsCollectionQuery(
+                quantityType: hrType,
+                quantitySamplePredicate: predicate,
+                options: .discreteAverage,
+                anchorDate: anchor,
+                intervalComponents: DateComponents(day: 1)
+            )
+            query.initialResultsHandler = { _, results, _ in
+                guard let col = results else { continuation.resume(returning: []); return }
+                var out: [(Date, Int)] = []
+                col.enumerateStatistics(from: start, to: .now) { stats, _ in
+                    if let avg = stats.averageQuantity()?.doubleValue(for: unit) {
+                        out.append((stats.startDate, Int(avg)))
+                    }
+                }
+                continuation.resume(returning: out)
+            }
+            store.execute(query)
+        }
+    }
+
+    /// Total sleep per wake-day for the last `days` days, batch-fetched in one query.
+    func fetchSleepHistory(days: Int) async -> [(date: Date, hours: Double)] {
+        guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { return [] }
+        let cal = Calendar.current
+        let dayStart = cal.startOfDay(for: .now)
+        guard let windowStart = cal.date(byAdding: .day, value: -days, to: dayStart) else { return [] }
+        let predicate = HKQuery.predicateForSamples(withStart: windowStart, end: .now, options: .strictStartDate)
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: sleepType, predicate: predicate,
+                limit: HKObjectQueryNoLimit, sortDescriptors: [sort]
+            ) { _, samples, _ in
+                guard let samples = samples as? [HKCategorySample], !samples.isEmpty else {
+                    continuation.resume(returning: [])
+                    return
+                }
+                let asleepValues: Set<Int> = [
+                    HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepREM.rawValue
+                ]
+                // Group intervals by wake day (end date's calendar day)
+                var byDay: [Date: [(Date, Date)]] = [:]
+                for s in samples where asleepValues.contains(s.value) {
+                    let wakeDay = cal.startOfDay(for: s.endDate)
+                    byDay[wakeDay, default: []].append((s.startDate, s.endDate))
+                }
+                var out: [(Date, Double)] = []
+                for (day, intervals) in byDay {
+                    var sorted = intervals.sorted { $0.0 < $1.0 }
+                    var merged: [(Date, Date)] = [sorted[0]]
+                    for iv in sorted.dropFirst() {
+                        let last = merged[merged.count - 1]
+                        if iv.0 <= last.1 { merged[merged.count - 1] = (last.0, max(last.1, iv.1)) }
+                        else { merged.append(iv) }
+                    }
+                    let h = merged.reduce(0.0) { $0 + $1.1.timeIntervalSince($1.0) } / 3600
+                    if (0.5...14).contains(h) { out.append((day, h)) }
+                }
+                continuation.resume(returning: out.sorted { $0.0 < $1.0 })
+            }
+            self.store.execute(query)
+        }
+    }
+
+    /// Average daily macros over the last `days` days (only counts days with logged data).
+    func fetchNutritionAverages(days: Int) async -> (kcal: Int?, protein: Int?, carbs: Int?, fat: Int?) {
+        guard HKHealthStore.isHealthDataAvailable() else { return (nil, nil, nil, nil) }
+        async let kcalV  = fetchDailyMacroValues(.dietaryEnergyConsumed, unit: .kilocalorie(), days: days)
+        async let protV  = fetchDailyMacroValues(.dietaryProtein,        unit: .gram(),        days: days)
+        async let carbsV = fetchDailyMacroValues(.dietaryCarbohydrates,  unit: .gram(),        days: days)
+        async let fatV   = fetchDailyMacroValues(.dietaryFatTotal,       unit: .gram(),        days: days)
+        func avg(_ vals: [Double]) -> Int? {
+            let nonZero = vals.filter { $0 > 0 }
+            return nonZero.isEmpty ? nil : Int(nonZero.reduce(0, +) / Double(nonZero.count))
+        }
+        return (avg(await kcalV), avg(await protV), avg(await carbsV), avg(await fatV))
+    }
+
+    private func fetchDailyMacroValues(
+        _ identifier: HKQuantityTypeIdentifier,
+        unit: HKUnit,
+        days: Int
+    ) async -> [Double] {
+        guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { return [] }
+        let cal = Calendar.current
+        let anchor = cal.startOfDay(for: .now)
+        guard let start = cal.date(byAdding: .day, value: -days, to: anchor) else { return [] }
+        let pred = HKQuery.predicateForSamples(withStart: start, end: .now, options: .strictStartDate)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKStatisticsCollectionQuery(
+                quantityType: type, quantitySamplePredicate: pred,
+                options: .cumulativeSum, anchorDate: anchor,
+                intervalComponents: DateComponents(day: 1)
+            )
+            query.initialResultsHandler = { _, results, _ in
+                guard let col = results else { continuation.resume(returning: []); return }
+                var vals: [Double] = []
+                col.enumerateStatistics(from: start, to: .now) { stats, _ in
+                    if let v = stats.sumQuantity()?.doubleValue(for: unit) { vals.append(v) }
+                }
+                continuation.resume(returning: vals)
+            }
+            self.store.execute(query)
+        }
+    }
+
     // MARK: - Unlogged moved days (for auto-fill prompt)
 
     /// Returns dates (up to `lookback` days back) where HK shows movement but no Entry was logged.

@@ -404,8 +404,8 @@ struct DayCell: View {
 
 struct EntryDetailView: View {
     let entry: Entry
-    @Environment(\.dismiss) private var dismiss
     @State private var stats: DayStats? = nil
+    @State private var showEditSheet = false
 
     private let activityLabels: [String: String] = [
         "walk": "🚶 Walk",
@@ -419,83 +419,254 @@ struct EntryDetailView: View {
     private var accent: Color { entry.didMove ? Theme.green : Theme.muted }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Capsule()
-                .fill(Theme.muted)
-                .frame(width: 36, height: 4)
-                .padding(.top, 12)
-                .padding(.bottom, 24)
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Emoji + status
+                    VStack(spacing: 10) {
+                        Text(emoji)
+                            .font(.system(size: 52))
 
-            VStack(spacing: 20) {
-                // Emoji + status
-                VStack(spacing: 10) {
-                    Text(emoji)
-                        .font(.system(size: 52))
+                        Text(statusText)
+                            .font(.title2.bold())
+                            .foregroundStyle(accent)
 
-                    Text(statusText)
-                        .font(.title2.bold())
-                        .foregroundStyle(accent)
-
-                    Text(entry.date, format: .dateTime.weekday(.wide).month(.wide).day().year())
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                // Activity chips
-                if !entry.activities.isEmpty {
-                    HStack(spacing: 8) {
-                        ForEach(entry.activities, id: \.self) { tag in
-                            Text(activityLabels[tag] ?? tag)
-                                .font(.subheadline)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 7)
-                                .background(Theme.card)
-                                .clipShape(Capsule())
-                        }
+                        Text(entry.date, format: .dateTime.weekday(.wide).month(.wide).day().year())
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
-                    .frame(maxWidth: .infinity)
-                }
+                    .padding(.top, 8)
 
-                // Note
-                if let note = entry.note, !note.isEmpty {
-                    Text("\"\(note)\"")
-                        .font(.subheadline.italic())
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                }
-
-                // HealthKit swipeable stat cards
-                if let s = stats {
-                    VStack(spacing: 6) {
-                        Divider()
-                            .padding(.horizontal, 24)
-
-                        TabView {
-                            StatCardMovement(s: s)
-
-                            if s.restingHR != nil || s.hrv != nil || s.sleepHours != nil {
-                                StatCardRecovery(s: s)
-                            }
-
-                            if s.foodCalories != nil || s.protein != nil {
-                                StatCardNutrition(s: s)
+                    // Activity chips
+                    if !entry.activities.isEmpty {
+                        HStack(spacing: 8) {
+                            ForEach(entry.activities, id: \.self) { tag in
+                                Text(activityLabels[tag] ?? tag)
+                                    .font(.subheadline)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 7)
+                                    .background(Theme.card)
+                                    .clipShape(Capsule())
                             }
                         }
-                        .tabViewStyle(.page(indexDisplayMode: .automatic))
-                        .frame(height: 150)
+                        .frame(maxWidth: .infinity)
                     }
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+
+                    // Note
+                    if let note = entry.note, !note.isEmpty {
+                        Text("\"\(note)\"")
+                            .font(.subheadline.italic())
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                    }
+
+                    // HealthKit swipeable stat cards
+                    if let s = stats {
+                        VStack(spacing: 6) {
+                            Divider()
+                                .padding(.horizontal, 24)
+
+                            TabView {
+                                StatCardMovement(s: s)
+
+                                if s.restingHR != nil || s.hrv != nil || s.sleepHours != nil {
+                                    StatCardRecovery(s: s)
+                                }
+
+                                if s.foodCalories != nil || s.protein != nil {
+                                    StatCardNutrition(s: s)
+                                }
+                            }
+                            .tabViewStyle(.page(indexDisplayMode: .automatic))
+                            .frame(height: 150)
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 32)
+                .animation(.easeInOut(duration: 0.25), value: stats != nil)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Edit") { showEditSheet = true }
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Theme.blue)
                 }
             }
-            .padding(.horizontal, 24)
-            .animation(.easeInOut(duration: 0.25), value: stats != nil)
-
-            Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .task {
             stats = await HealthKitService.shared.fetchStats(for: entry.date)
+        }
+        .sheet(isPresented: $showEditSheet) {
+            EditEntryView(entry: entry)
+        }
+    }
+}
+
+// MARK: - Edit Entry Sheet
+
+struct EditEntryView: View {
+    @Bindable var entry: Entry
+    @Environment(\.dismiss) private var dismiss
+
+    private let chips: [(emoji: String, label: String, tag: String)] = [
+        ("🚶", "Walk", "walk"),
+        ("🏃", "Run", "run"),
+        ("😴", "Too tired", "tired"),
+        ("💼", "Busy day", "busy")
+    ]
+
+    @State private var selectedTags: Set<String> = []
+    @State private var note = ""
+    @State private var didMove = false
+    @State private var isSaving = false
+    @FocusState private var noteFocused: Bool
+
+    init(entry: Entry) {
+        self.entry = entry
+        _selectedTags = State(initialValue: Set(entry.activities))
+        _note = State(initialValue: entry.note ?? "")
+        _didMove = State(initialValue: entry.didMove)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
+
+                    // Moved / Rest toggle
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Did you move?")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        HStack(spacing: 12) {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.15)) { didMove = true }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text("🙌")
+                                    Text("Moved")
+                                        .font(.subheadline.weight(.medium))
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(didMove ? Theme.green.opacity(0.15) : Theme.card)
+                                .foregroundStyle(didMove ? Theme.green : .secondary)
+                                .clipShape(Capsule())
+                                .overlay(Capsule().stroke(didMove ? Theme.green.opacity(0.4) : Color.clear, lineWidth: 1.5))
+                            }
+                            .buttonStyle(.plain)
+                            .animation(.easeInOut(duration: 0.15), value: didMove)
+
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.15)) { didMove = false }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text("😴")
+                                    Text("Rest day")
+                                        .font(.subheadline.weight(.medium))
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(!didMove ? Theme.muted.opacity(0.2) : Theme.card)
+                                .foregroundStyle(!didMove ? Theme.muted : .secondary)
+                                .clipShape(Capsule())
+                                .overlay(Capsule().stroke(!didMove ? Theme.muted.opacity(0.5) : Color.clear, lineWidth: 1.5))
+                            }
+                            .buttonStyle(.plain)
+                            .animation(.easeInOut(duration: 0.15), value: didMove)
+                        }
+                    }
+
+                    // Activity chips
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Activities")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        FlowLayout(spacing: 10) {
+                            ForEach(chips, id: \.tag) { chip in
+                                ChipButton(
+                                    emoji: chip.emoji,
+                                    label: chip.label,
+                                    isSelected: selectedTags.contains(chip.tag)
+                                ) {
+                                    Haptics.impact(.light)
+                                    if selectedTags.contains(chip.tag) {
+                                        selectedTags.remove(chip.tag)
+                                    } else {
+                                        selectedTags.insert(chip.tag)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Note field
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Note")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        TextField("Add a note… (optional)", text: $note, axis: .vertical)
+                            .focused($noteFocused)
+                            .lineLimit(3, reservesSpace: true)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .background(Theme.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 24)
+                .padding(.bottom, 40)
+            }
+            .background(Theme.background.ignoresSafeArea())
+            .navigationTitle("Edit Entry")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundStyle(.secondary)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isSaving ? "Saving…" : "Save") {
+                        saveChanges()
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Theme.blue)
+                    .disabled(isSaving)
+                }
+            }
+            .onTapGesture { noteFocused = false }
+        }
+    }
+
+    private func saveChanges() {
+        guard !isSaving else { return }
+        isSaving = true
+        noteFocused = false
+        Haptics.success()
+
+        entry.didMove = didMove
+        entry.activities = Array(selectedTags)
+        entry.note = note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? nil
+            : note.trimmingCharacters(in: .whitespacesAndNewlines)
+        entry.synced = false
+
+        Task {
+            let stats = await HealthKitService.shared.fetchStats(for: entry.date)
+            try? await BackendService.syncEntry(entry, stats: stats)
+            await MainActor.run {
+                entry.synced = true
+                isSaving = false
+                dismiss()
+            }
         }
     }
 }

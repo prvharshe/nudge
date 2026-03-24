@@ -10,6 +10,7 @@
 		0D5B9E602F5F07480065AB64 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0D5B9E5F2F5F07480065AB64 /* WidgetKit.framework */; };
 		0D5B9E622F5F07480065AB64 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0D5B9E612F5F07480065AB64 /* SwiftUI.framework */; };
 		0D5B9E6F2F5F07490065AB64 /* NudgeWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 0D5B9E5D2F5F07480065AB64 /* NudgeWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		82D90FA080104A52BEB06F99 /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1E39E7850C5E46D1A4967BFA /* HealthKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -42,6 +43,7 @@
 		0D5B9E5F2F5F07480065AB64 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		0D5B9E612F5F07480065AB64 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		0D5B9E7A2F5F0A420065AB64 /* NudgeWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NudgeWidgetExtension.entitlements; sourceTree = "<group>"; };
+		1E39E7850C5E46D1A4967BFA /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -59,12 +61,20 @@
 			);
 			target = 0D5B9E5C2F5F07480065AB64 /* NudgeWidgetExtension */;
 		};
+		0DA720172F6EFF5C0052670A /* Exceptions for "nudge" folder in "nudge" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 0D5B9E2E2F5C703C0065AB64 /* nudge */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		0D5B9E312F5C703C0065AB64 /* nudge */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				0DA720172F6EFF5C0052670A /* Exceptions for "nudge" folder in "nudge" target */,
 				0D5B9E782F5F09020065AB64 /* Exceptions for "nudge" folder in "NudgeWidgetExtension" target */,
 			);
 			path = nudge;
@@ -85,6 +95,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				82D90FA080104A52BEB06F99 /* HealthKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -123,6 +134,7 @@
 		0D5B9E5E2F5F07480065AB64 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				1E39E7850C5E46D1A4967BFA /* HealthKit.framework */,
 				0D5B9E5F2F5F07480065AB64 /* WidgetKit.framework */,
 				0D5B9E612F5F07480065AB64 /* SwiftUI.framework */,
 			);
@@ -391,6 +403,8 @@
 				DEVELOPMENT_TEAM = C68DCF3L62;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = nudge/Info.plist;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Nudge reads your workouts and step count to automatically detect if you moved today.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -424,6 +438,8 @@
 				DEVELOPMENT_TEAM = C68DCF3L62;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = nudge/Info.plist;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Nudge reads your workouts and step count to automatically detect if you moved today.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
