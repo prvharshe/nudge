@@ -92,6 +92,11 @@ struct ContentView: View {
                 showMorningNudge = true
             }
         }
+        .task {
+            // Re-request authorization each launch so new HK types (e.g. nutrition)
+            // prompt the user even if they already granted prior types.
+            await HealthKitService.shared.requestAuthorization()
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 // Reset daily repeating notifications (clears stale one-shots from prior days)
