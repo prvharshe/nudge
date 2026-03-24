@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { searchEntries } from '../services/supermemory.js';
+import { searchEntries, searchMemories } from '../services/supermemory.js';
 import { generateNudge } from '../services/groq.js';
 
 const router = Router();
@@ -54,9 +54,17 @@ router.get('/', async (req, res) => {
   }
 
   try {
-    const entries = await searchEntries(userId, 14);
+    const [entries, contextMems] = await Promise.all([
+      searchEntries(userId, 12),
+      searchMemories(userId, 3, 'injury sick travel context life event', 'context'),
+    ]);
+    // Append any life-context notes to entries so Groq sees them
+    const allContext = [
+      ...entries,
+      ...contextMems.map(m => `[Life context] ${m.replace(/\[Life context[^\]]*\]\s*/i, '')}`),
+    ];
     const recoveryContext = buildRecoveryContext(restingHR, hrv, recoveryScore, recoveryLabel);
-    const message = await generateNudge(entries, userName || 'friend', recoveryContext, goal || null, profileSummary || null);
+    const message = await generateNudge(allContext, userName || 'friend', recoveryContext, goal || null, profileSummary || null);
     cache.set(key, message);
     res.json({ message });
   } catch (err) {

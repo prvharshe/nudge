@@ -117,11 +117,12 @@ extension TrackSceneView {
         // ── Ground ────────────────────────────────────────────────────────────
 
         private func addGround() {
-            let floor = SCNFloor()
-            floor.reflectivity = 0
+            let ground = SCNBox(width: 50, height: 0.1, length: 50, chamferRadius: 0)
             groundMat = mat("5D8A3C")
-            floor.materials = [groundMat]
-            scene.rootNode.addChildNode(SCNNode(geometry: floor))
+            ground.materials = [groundMat]
+            let node = SCNNode(geometry: ground)
+            node.position = SCNVector3(0, -0.05, 0)
+            scene.rootNode.addChildNode(node)
         }
 
         // ── Path ─────────────────────────────────────────────────────────────

@@ -23,6 +23,14 @@ struct FollowUpView: View {
     @State private var showReaction = false
     @State private var reactionText: String? = nil
     @State private var showAddActivity = false
+    private let contextChips: [(emoji: String, label: String, tag: String)] = [
+        ("🤒", "Not feeling well", "sick"),
+        ("🤕", "Injury / pain",    "injury"),
+        ("✈️", "Traveling",        "travel"),
+        ("💼", "Busy period",      "busy_life"),
+        ("🎉", "Special day",      "special")
+    ]
+    @State private var contextTag: String? = nil
     @FocusState private var noteFocused: Bool
 
     var body: some View {
@@ -107,6 +115,39 @@ struct FollowUpView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 20)
 
+            // Life context (optional flag)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Any context?")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 24)
+
+                FlowLayout(spacing: 8) {
+                    ForEach(contextChips, id: \.tag) { chip in
+                        Button {
+                            Haptics.impact(.light)
+                            contextTag = contextTag == chip.tag ? nil : chip.tag
+                        } label: {
+                            HStack(spacing: 5) {
+                                Text(chip.emoji)
+                                Text(chip.label)
+                                    .font(.caption.weight(.medium))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(contextTag == chip.tag ? Color.orange.opacity(0.12) : Theme.card)
+                            .foregroundStyle(contextTag == chip.tag ? Color.orange : .secondary)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(contextTag == chip.tag ? Color.orange.opacity(0.4) : Color.clear, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .animation(.easeInOut(duration: 0.15), value: contextTag)
+                    }
+                }
+                .padding(.horizontal, 24)
+            }
+            .padding(.top, 8)
+
             Spacer()
 
             // Buttons
@@ -174,6 +215,8 @@ struct FollowUpView: View {
         // Fetch reaction + HK stats + sync in parallel; onDone() fires via overlay dismiss
         let activities = Array(selectedTags)
         let entryDate = entry.date
+        let capturedContextTag = contextTag
+        let capturedContextChips = contextChips
         Task {
             async let reactionFetch = BackendService.fetchReaction(didMove: didMove, activities: activities)
             let stats = await HealthKitService.shared.fetchStats(for: entryDate)
@@ -184,6 +227,14 @@ struct FollowUpView: View {
             }
             try? await syncTask
             await MainActor.run { entry.synced = true }
+
+            // Store life context memory if user flagged something
+            if let tag = capturedContextTag,
+               let chip = capturedContextChips.first(where: { $0.tag == tag }) {
+                let dateStr = entryDate.formatted(date: .long, time: .omitted)
+                let content = "[Life context on \(dateStr)] User flagged: \(chip.label). This may be relevant context for understanding movement patterns around this date."
+                await BackendService.storeMemory(type: .context, content: content)
+            }
         }
     }
 }

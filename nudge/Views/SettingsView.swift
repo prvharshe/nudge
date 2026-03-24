@@ -462,6 +462,9 @@ struct EditProfileView: View {
                 }
             }
         }
+        .onDisappear {
+            Task { await UserProfile.syncToSupermemoryIfChanged() }
+        }
         .navigationTitle("Your profile")
         .navigationBarTitleDisplayMode(.inline)
     }

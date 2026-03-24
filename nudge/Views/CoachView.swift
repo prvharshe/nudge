@@ -311,6 +311,12 @@ struct CoachView: View {
                     let msg = CoachMessage(question: question, answer: answer)
                     withAnimation { messages.append(msg) }
                     saveMessages()
+                    // Auto-save conversation to Supermemory at 3 and 8 exchanges
+                    let count = messages.count
+                    if count == 3 || count == 8 {
+                        let snapshot = messages
+                        Task { await BackendService.saveConversation(snapshot) }
+                    }
                     isLoading = false
                 }
             } catch {
@@ -346,9 +352,12 @@ struct CoachView: View {
     }
 
     private func clearMessages() {
-        withAnimation {
-            messages = []
+        // Save conversation to Supermemory before clearing
+        if messages.count >= 2 {
+            let snapshot = messages
+            Task { await BackendService.saveConversation(snapshot) }
         }
+        withAnimation { messages = [] }
         UserDefaults.standard.removeObject(forKey: storageKey)
     }
 }

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { addEntry, deleteAllEntries } from '../services/supermemory.js';
+import { addMemory, deleteAllEntries } from '../services/supermemory.js';
 
 const router = Router();
 
@@ -40,7 +40,7 @@ router.post('/', async (req, res) => {
   const content = `On ${dateStr}, the user ${movementStr}. ${activityStr} ${noteStr} ${hkParts}`.trim().replace(/\s+/g, ' ');
 
   try {
-    await addEntry(content, userId);
+    await addMemory(content, userId, 'entry');
     res.json({ ok: true });
   } catch (err) {
     console.error('[entries] Supermemory error:', err.message);

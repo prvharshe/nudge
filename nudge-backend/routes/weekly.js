@@ -1,5 +1,5 @@
 import express from 'express';
-import { searchEntries } from '../services/supermemory.js';
+import { searchEntries, addMemory } from '../services/supermemory.js';
 import { generateWeeklyInsight } from '../services/groq.js';
 
 const router = express.Router();
@@ -22,6 +22,11 @@ router.post('/', async (req, res) => {
   try {
     const entries = await searchEntries(userId, 30);
     const insight = await generateWeeklyInsight(entries, goal || null, profileSummary || null);
+    // Store the insight back as a memory for future Coach/nudge context
+    const today = new Date().toDateString();
+    addMemory(`[Weekly insight for ${today}] ${insight}`, userId, 'insight').catch(err => {
+      console.warn('[weekly] Could not store insight back:', err.message);
+    });
     res.json({ insight });
   } catch (err) {
     console.error('weekly insight error:', err.message);

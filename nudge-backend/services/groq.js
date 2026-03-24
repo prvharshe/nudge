@@ -119,13 +119,18 @@ export async function generateNudge(entries, userName = 'friend', recoveryContex
  * @param {Array<{role: string, content: string}>} history  Recent conversation turns (oldest first)
  * @returns {string}          The coach's answer
  */
-export async function generateCoachAnswer(entries, question, history = [], goal = null, profileSummary = null) {
-  const context = entries.length > 0
+export async function generateCoachAnswer(entries, question, history = [], goal = null, profileSummary = null, profileMems = []) {
+  const entriesText = entries.length > 0
     ? entries.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n')
     : 'No movement history stored yet.';
 
   const profileLine = profileSummary ? `\n${profileSummary}` : '';
-  const systemWithContext = `${COACH_SYSTEM_PROMPT}${goalLine(goal)}${profileLine}\n\nMovement history context (most relevant entries first):\n${context}`;
+
+  let systemWithContext = `${COACH_SYSTEM_PROMPT}${goalLine(goal)}${profileLine}\n\nMovement history and context (most relevant to the question):\n${entriesText}`;
+
+  if (profileMems.length > 0) {
+    systemWithContext += `\n\nPersistent user profile (from memory):\n${profileMems.join('\n')}`;
+  }
 
   const messages = [
     { role: 'system', content: systemWithContext },
@@ -225,4 +230,31 @@ export async function generateWeeklyInsight(entries, goal = null, profileSummary
   const message = completion.choices[0]?.message?.content?.trim();
   if (!message) throw new Error('Groq returned empty weekly insight');
   return message;
+}
+
+/**
+ * Summarise a coach conversation into 2-3 sentences for Supermemory storage.
+ * @param {Array<{role: string, content: string}>} messages
+ * @returns {string|null}
+ */
+export async function summarizeConversation(messages) {
+  if (!messages?.length) return null;
+  const transcript = messages
+    .map(m => `${m.role === 'user' ? 'User' : 'Coach'}: ${m.content}`)
+    .join('\n');
+
+  const completion = await client().chat.completions.create({
+    model: 'llama-3.1-8b-instant',
+    messages: [
+      {
+        role: 'system',
+        content: 'Summarise this coaching conversation in 2-3 sentences. Focus on: what the user asked about, patterns or insights identified, and any goals or intentions the user mentioned. Be specific with activities, numbers, and dates where present. Use past tense. Start with "Coaching session:"'
+      },
+      { role: 'user', content: transcript }
+    ],
+    max_tokens: 120,
+    temperature: 0.3,
+  });
+
+  return completion.choices[0]?.message?.content?.trim() ?? null;
 }

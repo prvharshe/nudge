@@ -184,6 +184,50 @@ enum BackendService {
         return json.insight
     }
 
+    // MARK: - Memory type
+
+    enum MemoryType: String {
+        case profile, insight, milestone, convo, context
+    }
+
+    // MARK: - Store a typed memory in Supermemory
+
+    /// Fire-and-forget — never throws. Errors are silently dropped.
+    static func storeMemory(type: MemoryType, content: String) async {
+        guard let url = URL(string: "\(baseURL)/api/memories") else { return }
+        let body: [String: Any] = [
+            "userId": UserService.userId,
+            "type": type.rawValue,
+            "content": content
+        ]
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 10
+        _ = try? await URLSession.shared.data(for: request)
+    }
+
+    // MARK: - Save coach conversation summary
+
+    /// Sends conversation turns to backend; Groq summarises and stores in Supermemory.
+    /// Silent no-op if fewer than 2 messages.
+    static func saveConversation(_ messages: [CoachMessage]) async {
+        guard messages.count >= 2,
+              let url = URL(string: "\(baseURL)/api/memories/summarize-convo") else { return }
+        let history = messages.flatMap { msg in
+            [["role": "user",      "content": msg.question],
+             ["role": "assistant", "content": msg.answer]]
+        }
+        let body: [String: Any] = ["userId": UserService.userId, "messages": history]
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 20
+        _ = try? await URLSession.shared.data(for: request)
+    }
+
     // MARK: - Delete all Supermemory entries for this user
     static func deleteSupermemoryData() async throws -> (deleted: Int, failed: Int) {
         let userId = UserService.userId

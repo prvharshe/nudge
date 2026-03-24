@@ -100,6 +100,8 @@ struct ContentView: View {
             // Re-request authorization each launch so new HK types (e.g. nutrition)
             // prompt the user even if they already granted prior types.
             await HealthKitService.shared.requestAuthorization()
+            // Sync profile to Supermemory if it has changed since last sync
+            Task { await UserProfile.syncToSupermemoryIfChanged() }
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
@@ -398,6 +400,22 @@ struct TodayDoneView: View {
                 hrv:        recovery.hrv,
                 sleepHours: stats?.sleepHours
             )
+
+            // Milestone detection: store significant streaks in Supermemory once per occurrence
+            if entry.didMove {
+                let s = streak.current
+                let milestoneValues = [7, 30, 100]
+                if milestoneValues.contains(s) {
+                    let dayKey = Calendar.current.startOfDay(for: entry.date).timeIntervalSince1970
+                    let milestoneKey = "nudge.milestone.\(s).\(Int(dayKey))"
+                    if !UserDefaults.standard.bool(forKey: milestoneKey) {
+                        let dateStr = entry.date.formatted(date: .long, time: .omitted)
+                        let content = "[Milestone] Achieved a \(s)-day movement streak, completed on \(dateStr). This is a significant personal achievement."
+                        await BackendService.storeMemory(type: .milestone, content: content)
+                        UserDefaults.standard.set(true, forKey: milestoneKey)
+                    }
+                }
+            }
         }
         .safeAreaInset(edge: .bottom) {
             Button {

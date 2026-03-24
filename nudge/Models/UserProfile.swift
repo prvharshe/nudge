@@ -166,4 +166,19 @@ enum UserProfile {
 
         return parts.isEmpty ? "" : "User profile: \(parts.joined(separator: ", "))."
     }
+
+    // MARK: - Supermemory sync
+
+    /// Syncs the profile to Supermemory only when the summary has changed.
+    /// Call on app launch and after profile edits.
+    static func syncToSupermemoryIfChanged() async {
+        let s = summary
+        guard !s.isEmpty else { return }
+        let lastKey = "nudge.profileLastSynced"
+        let lastSynced = UserDefaults.standard.string(forKey: lastKey) ?? ""
+        guard s != lastSynced else { return }
+        let content = "[User Profile] \(s)"
+        await BackendService.storeMemory(type: .profile, content: content)
+        UserDefaults.standard.set(s, forKey: lastKey)
+    }
 }
