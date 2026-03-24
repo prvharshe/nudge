@@ -1,15 +1,70 @@
 import HealthKit
 
+// MARK: - User goal
+
+enum UserGoal: String, CaseIterable {
+    case loseWeight   = "lose_weight"
+    case buildMuscle  = "build_muscle"
+    case endurance    = "improve_endurance"
+    case stayActive   = "stay_active"
+    case feelBetter   = "feel_better"
+
+    var emoji: String {
+        switch self {
+        case .loseWeight:  return "🔥"
+        case .buildMuscle: return "💪"
+        case .endurance:   return "🏃"
+        case .stayActive:  return "⚡"
+        case .feelBetter:  return "😌"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .loseWeight:  return "Lose weight"
+        case .buildMuscle: return "Build muscle"
+        case .endurance:   return "Improve endurance"
+        case .stayActive:  return "Stay active"
+        case .feelBetter:  return "Feel better"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .loseWeight:  return "Burn fat and feel lighter"
+        case .buildMuscle: return "Get stronger and gain lean mass"
+        case .endurance:   return "Run farther, breathe easier"
+        case .stayActive:  return "Build a consistent movement habit"
+        case .feelBetter:  return "More energy and less stress"
+        }
+    }
+
+    var groqLabel: String {
+        switch self {
+        case .loseWeight:  return "lose weight and burn fat"
+        case .buildMuscle: return "build muscle and get stronger"
+        case .endurance:   return "improve endurance and cardiovascular fitness"
+        case .stayActive:  return "stay consistently active and build a movement habit"
+        case .feelBetter:  return "feel better overall — more energy, less stress"
+        }
+    }
+}
+
 // MARK: - Day statistics (for history detail + sync enrichment)
 
 struct DayStats {
     let steps: Int
-    let workoutMinutes: Int?   // nil if no workout recorded
-    let calories: Int?          // active calories, nil if unavailable
-    let workoutType: String?    // e.g. "Outdoor Run"
-    let sleepHours: Double?    // total sleep the night before, nil if unavailable
-    let restingHR: Int?         // resting heart rate in BPM for that day
-    let hrv: Int?               // HRV SDNN in milliseconds for that day
+    let workoutMinutes: Int?    // nil if no workout recorded
+    let calories: Int?           // active calories burned during workout
+    let workoutType: String?     // e.g. "Outdoor Run"
+    let sleepHours: Double?     // total sleep the night before
+    let restingHR: Int?          // resting heart rate in BPM
+    let hrv: Int?                // HRV SDNN in milliseconds
+    // Nutrition (from Health app — e.g. Bevel, MyFitnessPal)
+    let foodCalories: Int?       // dietary energy consumed
+    let protein: Int?            // grams
+    let carbs: Int?              // grams
+    let fat: Int?                // grams
 }
 
 // MARK: - HealthKit detection result
@@ -38,7 +93,9 @@ final class HealthKitService {
         var types: Set<HKObjectType> = [HKObjectType.workoutType()]
         let quantityIDs: [HKQuantityTypeIdentifier] = [
             .stepCount, .activeEnergyBurned,
-            .restingHeartRate, .heartRateVariabilitySDNN
+            .restingHeartRate, .heartRateVariabilitySDNN,
+            .dietaryEnergyConsumed, .dietaryProtein,
+            .dietaryCarbohydrates, .dietaryFatTotal
         ]
         for id in quantityIDs {
             if let t = HKObjectType.quantityType(forIdentifier: id) { types.insert(t) }
@@ -173,12 +230,20 @@ final class HealthKitService {
         async let hrv     = fetchDailyQuantity(.heartRateVariabilitySDNN,
                                                unit: .secondUnit(with: .milli),
                                                from: start, to: end)
+        async let foodCal  = fetchNutritionSum(.dietaryEnergyConsumed, unit: .kilocalorie(), from: start, to: end)
+        async let prot     = fetchNutritionSum(.dietaryProtein, unit: .gram(), from: start, to: end)
+        async let carbsVal = fetchNutritionSum(.dietaryCarbohydrates, unit: .gram(), from: start, to: end)
+        async let fatVal   = fetchNutritionSum(.dietaryFatTotal, unit: .gram(), from: start, to: end)
 
         let stepCount   = await steps
         let bestWorkout = await workout
         let sleepHours  = await sleep
         let restingHR   = await hr.map { Int($0) }
         let hrvMs       = await hrv.map { Int($0) }
+        let foodCalories = await foodCal.map { Int($0) }
+        let proteinG     = await prot.map { Int($0) }
+        let carbsG       = await carbsVal.map { Int($0) }
+        let fatG         = await fatVal.map { Int($0) }
 
         var workoutMinutes: Int? = nil
         var calories: Int? = nil
@@ -200,7 +265,11 @@ final class HealthKitService {
             workoutType: workoutType,
             sleepHours: sleepHours,
             restingHR: restingHR,
-            hrv: hrvMs
+            hrv: hrvMs,
+            foodCalories: foodCalories,
+            protein: proteinG,
+            carbs: carbsG,
+            fat: fatG
         )
     }
 
@@ -238,6 +307,28 @@ final class HealthKitService {
                 continuation.resume(returning: stats?.averageQuantity()?.doubleValue(for: unit))
             }
             store.execute(query)
+        }
+    }
+
+    // MARK: - Nutrition sum (dietary data logged in Health app)
+
+    private func fetchNutritionSum(
+        _ identifier: HKQuantityTypeIdentifier,
+        unit: HKUnit,
+        from start: Date,
+        to end: Date
+    ) async -> Double? {
+        guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { return nil }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+        return await withCheckedContinuation { continuation in
+            let query = HKStatisticsQuery(
+                quantityType: type,
+                quantitySamplePredicate: predicate,
+                options: .cumulativeSum
+            ) { _, stats, _ in
+                continuation.resume(returning: stats?.sumQuantity()?.doubleValue(for: unit))
+            }
+            self.store.execute(query)
         }
     }
 

@@ -498,6 +498,42 @@ struct EntryDetailView: View {
                             .frame(maxWidth: .infinity)
                         }
 
+                        // Nutrition row (from Health app)
+                        if s.foodCalories != nil || s.protein != nil {
+                            VStack(spacing: 6) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "fork.knife")
+                                        .font(.caption)
+                                        .foregroundStyle(Theme.green)
+                                    Text("Nutrition")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    if let kcal = s.foodCalories {
+                                        Text("\(kcal) kcal")
+                                            .font(.caption.weight(.semibold))
+                                    }
+                                }
+                                if s.protein != nil || s.carbs != nil || s.fat != nil {
+                                    HStack(spacing: 10) {
+                                        if let p = s.protein {
+                                            MacroPill(label: "Protein", value: "\(p)g", color: Theme.blue)
+                                        }
+                                        if let c = s.carbs {
+                                            MacroPill(label: "Carbs", value: "\(c)g", color: Theme.green)
+                                        }
+                                        if let f = s.fat {
+                                            MacroPill(label: "Fat", value: "\(f)g", color: Theme.purple)
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(Theme.card, in: RoundedRectangle(cornerRadius: 12))
+                        }
+
                         // Sleep pill (separate row — clearly "night before")
                         if let sleep = s.sleepHours {
                             HStack(spacing: 6) {
@@ -550,6 +586,26 @@ struct StatPill: View {
         .padding(.vertical, 10)
         .background(Theme.card)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct MacroPill: View {
+    let label: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(color)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

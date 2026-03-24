@@ -25,6 +25,10 @@ enum BackendService {
             if let sh = s.sleepHours    { body["sleepHours"] = sh }
             if let hr = s.restingHR     { body["restingHR"] = hr }
             if let hv = s.hrv           { body["hrv"] = hv }
+            if let fc = s.foodCalories { body["foodCalories"] = fc }
+            if let pr = s.protein      { body["protein"] = pr }
+            if let cb = s.carbs        { body["carbs"] = cb }
+            if let ft = s.fat          { body["fat"] = ft }
         }
 
         var request = URLRequest(url: url)
@@ -49,6 +53,9 @@ enum BackendService {
             urlString += "&userName=\(encoded)"
         }
         if refresh { urlString += "&refresh=true" }
+
+        let userGoal = UserDefaults.standard.string(forKey: "nudge.userGoal") ?? ""
+        if !userGoal.isEmpty { urlString += "&goal=\(userGoal)" }
 
         // Attach today's recovery signal so Groq can adapt the nudge tone
         let recovery = await HealthKitService.shared.fetchCurrentRecovery()
@@ -78,11 +85,13 @@ enum BackendService {
             throw URLError(.badURL)
         }
 
-        let body: [String: Any] = [
+        let goal = UserDefaults.standard.string(forKey: "nudge.userGoal") ?? ""
+        var body: [String: Any] = [
             "userId": UserService.userId,
             "question": question,
             "history": history
         ]
+        if !goal.isEmpty { body["goal"] = goal }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -106,11 +115,13 @@ enum BackendService {
             throw URLError(.badURL)
         }
 
-        let body: [String: Any] = [
+        let goal = UserDefaults.standard.string(forKey: "nudge.userGoal") ?? ""
+        var body: [String: Any] = [
             "userId": UserService.userId,
             "didMove": didMove,
             "activities": activities
         ]
+        if !goal.isEmpty { body["goal"] = goal }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -134,7 +145,9 @@ enum BackendService {
             throw URLError(.badURL)
         }
 
-        let body: [String: Any] = ["userId": UserService.userId]
+        let goal = UserDefaults.standard.string(forKey: "nudge.userGoal") ?? ""
+        var body: [String: Any] = ["userId": UserService.userId]
+        if !goal.isEmpty { body["goal"] = goal }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

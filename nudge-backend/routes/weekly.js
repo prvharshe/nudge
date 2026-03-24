@@ -13,7 +13,7 @@ const router = express.Router();
  * weekly pattern analysis. Caching is handled client-side.
  */
 router.post('/', async (req, res) => {
-  const { userId } = req.body;
+  const { userId, goal } = req.body;
 
   if (!userId) {
     return res.status(400).json({ error: 'userId is required' });
@@ -21,7 +21,7 @@ router.post('/', async (req, res) => {
 
   try {
     const entries = await searchEntries(userId, 30);
-    const insight = await generateWeeklyInsight(entries);
+    const insight = await generateWeeklyInsight(entries, goal || null);
     res.json({ insight });
   } catch (err) {
     console.error('weekly insight error:', err.message);

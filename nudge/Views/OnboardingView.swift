@@ -3,9 +3,11 @@ import SwiftUI
 struct OnboardingView: View {
     @AppStorage("nudge.onboardingComplete") private var onboardingComplete = false
     @AppStorage("nudge.userName") private var userName = ""
+    @AppStorage("nudge.userGoal") private var userGoal = ""
 
     @State private var step: OnboardingStep = .splash
     @State private var nameInput = ""
+    @State private var selectedGoal: UserGoal? = nil
     @FocusState private var nameFocused: Bool
 
     var body: some View {
@@ -19,6 +21,12 @@ struct OnboardingView: View {
                     ))
             case .name:
                 nameScreen
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing),
+                        removal: .move(edge: .leading)
+                    ))
+            case .goal:
+                goalScreen
                     .transition(.asymmetric(
                         insertion: .move(edge: .trailing),
                         removal: .move(edge: .leading)
@@ -148,10 +156,87 @@ struct OnboardingView: View {
         guard !trimmed.isEmpty else { return }
         Haptics.impact(.medium)
         userName = trimmed
-        withAnimation(.easeInOut(duration: 0.35)) { step = .notifications }
+        withAnimation(.easeInOut(duration: 0.35)) { step = .goal }
     }
 
-    // MARK: - Step 3: Notifications
+    // MARK: - Step 3: Goal
+
+    private var goalScreen: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            VStack(spacing: 28) {
+                Text("🎯")
+                    .font(.system(size: 64))
+
+                VStack(spacing: 10) {
+                    Text("What's your goal?")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .multilineTextAlignment(.center)
+
+                    Text("I'll tailor your nudges and coaching to help you get there.")
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+
+                VStack(spacing: 10) {
+                    ForEach(UserGoal.allCases, id: \.rawValue) { goal in
+                        Button {
+                            Haptics.impact(.light)
+                            selectedGoal = goal
+                        } label: {
+                            HStack(spacing: 14) {
+                                Text(goal.emoji)
+                                    .font(.title2)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(goal.title)
+                                        .font(.system(.body, design: .rounded).weight(.medium))
+                                        .foregroundStyle(.primary)
+                                    Text(goal.subtitle)
+                                        .font(.system(.caption, design: .rounded))
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(selectedGoal == goal ? Theme.blue.opacity(0.08) : Theme.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .strokeBorder(selectedGoal == goal ? Theme.blue : Color.clear, lineWidth: 2)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(.horizontal, 32)
+
+            Spacer()
+
+            Button {
+                guard let goal = selectedGoal else { return }
+                Haptics.impact(.medium)
+                userGoal = goal.rawValue
+                withAnimation(.easeInOut(duration: 0.35)) { step = .notifications }
+            } label: {
+                Text("Continue →")
+                    .font(.system(.body, design: .rounded).weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 18)
+                    .background(selectedGoal == nil ? Theme.blue.opacity(0.3) : Theme.blue)
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+            }
+            .disabled(selectedGoal == nil)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 48)
+        }
+    }
+
+    // MARK: - Step 4: Notifications
 
     private var notificationsScreen: some View {
         VStack(spacing: 0) {
@@ -262,6 +347,7 @@ private struct NotificationPreviewRow: View {
 private enum OnboardingStep {
     case splash
     case name
+    case goal
     case notifications
 }
 

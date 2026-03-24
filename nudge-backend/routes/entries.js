@@ -10,7 +10,7 @@ const router = Router();
  * Stores the evening check-in entry in Supermemory as natural language.
  */
 router.post('/', async (req, res) => {
-  const { userId, date, didMove, activities = [], note, steps, workoutMinutes, calories, workoutType, sleepHours, restingHR, hrv } = req.body;
+  const { userId, date, didMove, activities = [], note, steps, workoutMinutes, calories, workoutType, sleepHours, restingHR, hrv, foodCalories, protein, carbs, fat } = req.body;
 
   if (!userId || typeof didMove !== 'boolean') {
     return res.status(400).json({ error: 'userId and didMove are required' });
@@ -31,6 +31,10 @@ router.post('/', async (req, res) => {
     sleepHours != null    ? `Sleep the night before: ${Number(sleepHours).toFixed(1)} hours.` : '',
     restingHR != null     ? `Resting heart rate: ${restingHR} BPM.` : '',
     hrv != null           ? `HRV: ${hrv}ms.` : '',
+    foodCalories != null ? `Food intake: ${foodCalories} kcal.` : '',
+    protein != null      ? `Protein: ${protein}g.` : '',
+    carbs != null        ? `Carbs: ${carbs}g.` : '',
+    fat != null          ? `Fat: ${fat}g.` : '',
   ].filter(Boolean).join(' ');
 
   const content = `On ${dateStr}, the user ${movementStr}. ${activityStr} ${noteStr} ${hkParts}`.trim().replace(/\s+/g, ' ');

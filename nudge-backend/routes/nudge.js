@@ -39,7 +39,7 @@ function buildRecoveryContext(restingHR, hrv) {
 }
 
 router.get('/', async (req, res) => {
-  const { userId, refresh, userName, restingHR, hrv } = req.query;
+  const { userId, refresh, userName, restingHR, hrv, goal } = req.query;
 
   if (!userId) {
     return res.status(400).json({ error: 'userId is required' });
@@ -53,7 +53,7 @@ router.get('/', async (req, res) => {
   try {
     const entries = await searchEntries(userId, 14);
     const recoveryContext = buildRecoveryContext(restingHR, hrv);
-    const message = await generateNudge(entries, userName || 'friend', recoveryContext);
+    const message = await generateNudge(entries, userName || 'friend', recoveryContext, goal || null);
     cache.set(key, message);
     res.json({ message });
   } catch (err) {

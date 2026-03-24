@@ -6,6 +6,8 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Query private var entries: [Entry]
 
+    @AppStorage("nudge.userGoal") private var userGoal = ""
+
     // Reset local data state
     @State private var showResetConfirm = false
     @State private var isResetting = false
@@ -29,6 +31,21 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                // MARK: - Your goal section
+                Section {
+                    if let goal = UserGoal(rawValue: userGoal) {
+                        Label("\(goal.emoji) \(goal.title)", systemImage: "target")
+                    }
+                    NavigationLink("Change goal") {
+                        GoalPickerView(selectedGoal: Binding(
+                            get: { UserGoal(rawValue: userGoal) },
+                            set: { userGoal = $0?.rawValue ?? "" }
+                        ))
+                    }
+                } header: {
+                    Text("Your goal")
+                }
+
                 // MARK: - Info section
                 Section {
                     HStack {
@@ -253,6 +270,38 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+}
+
+struct GoalPickerView: View {
+    @Binding var selectedGoal: UserGoal?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List {
+            ForEach(UserGoal.allCases, id: \.rawValue) { goal in
+                Button {
+                    selectedGoal = goal
+                    dismiss()
+                } label: {
+                    HStack(spacing: 14) {
+                        Text(goal.emoji).font(.title2)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(goal.title).font(.body.weight(.medium)).foregroundStyle(.primary)
+                            Text(goal.subtitle).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if selectedGoal == goal {
+                            Image(systemName: "checkmark").foregroundStyle(Theme.blue)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .navigationTitle("Change goal")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
