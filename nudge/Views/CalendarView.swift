@@ -717,6 +717,7 @@ private struct MetricColumn: View {
     let value: String
     let label: String
     var color: Color = .primary
+    var onInfo: (() -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 4) {
@@ -725,12 +726,21 @@ private struct MetricColumn: View {
                 .foregroundStyle(color)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            HStack(spacing: 3) {
+                Text(label)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                if onInfo != nil {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 8))
+                        .foregroundStyle(.tertiary)
+                }
+            }
         }
         .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture { onInfo?() }
     }
 }
 
@@ -738,6 +748,7 @@ private struct MetricColumn: View {
 
 private struct StatCardMovement: View {
     let s: DayStats
+    @State private var shownInfo: MetricInfoContext? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -749,7 +760,10 @@ private struct StatCardMovement: View {
                 MetricColumn(
                     value: s.steps > 0 ? s.steps.formatted() : "—",
                     label: "steps",
-                    color: Theme.green
+                    color: Theme.green,
+                    onInfo: s.steps > 0 ? {
+                        shownInfo = MetricInfoContext(info: MetricInfo.steps(value: s.steps), rawValue: "\(s.steps)")
+                    } : nil
                 )
                 if let mins = s.workoutMinutes {
                     Divider().frame(height: 36)
@@ -761,43 +775,13 @@ private struct StatCardMovement: View {
                 }
                 if let cal = s.calories {
                     Divider().frame(height: 36)
-                    MetricColumn(value: "\(cal)", label: "active cal", color: .orange)
-                }
-            }
-        }
-        .padding(16)
-        .padding(.bottom, 20) // room for page dots
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal, 24)
-    }
-}
-
-// MARK: - Recovery card
-
-private struct StatCardRecovery: View {
-    let s: DayStats
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Recovery", systemImage: "heart.circle.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 0) {
-                if let hr = s.restingHR {
-                    MetricColumn(value: "\(hr)", label: "resting HR", color: .red)
-                }
-                if let hv = s.hrv {
-                    if s.restingHR != nil { Divider().frame(height: 36) }
-                    MetricColumn(value: "\(hv)ms", label: "HRV", color: Theme.purple)
-                }
-                if let sleep = s.sleepHours {
-                    if s.restingHR != nil || s.hrv != nil { Divider().frame(height: 36) }
                     MetricColumn(
-                        value: String(format: "%.1fh", sleep),
-                        label: "sleep",
-                        color: Theme.purple
+                        value: "\(cal)",
+                        label: "active cal",
+                        color: .orange,
+                        onInfo: {
+                            shownInfo = MetricInfoContext(info: MetricInfo.calories(value: cal), rawValue: "\(cal)")
+                        }
                     )
                 }
             }
@@ -807,6 +791,69 @@ private struct StatCardRecovery: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 24)
+        .sheet(item: $shownInfo) { ctx in
+            MetricInfoSheet(info: ctx.info, currentValue: ctx.rawValue)
+                .presentationDetents([.large])
+        }
+    }
+}
+
+// MARK: - Recovery card
+
+private struct StatCardRecovery: View {
+    let s: DayStats
+    @State private var shownInfo: MetricInfoContext? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Recovery", systemImage: "heart.circle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 0) {
+                if let hr = s.restingHR {
+                    MetricColumn(
+                        value: "\(hr)",
+                        label: "resting HR",
+                        color: .red,
+                        onInfo: {
+                            shownInfo = MetricInfoContext(info: MetricInfo.restingHR(value: hr), rawValue: "\(hr)")
+                        }
+                    )
+                }
+                if let hv = s.hrv {
+                    if s.restingHR != nil { Divider().frame(height: 36) }
+                    MetricColumn(
+                        value: "\(hv)ms",
+                        label: "HRV",
+                        color: Theme.purple,
+                        onInfo: {
+                            shownInfo = MetricInfoContext(info: MetricInfo.hrv(value: hv), rawValue: "\(hv)")
+                        }
+                    )
+                }
+                if let sleep = s.sleepHours {
+                    if s.restingHR != nil || s.hrv != nil { Divider().frame(height: 36) }
+                    MetricColumn(
+                        value: String(format: "%.1fh", sleep),
+                        label: "sleep",
+                        color: .indigo,
+                        onInfo: {
+                            shownInfo = MetricInfoContext(info: MetricInfo.sleep(value: sleep), rawValue: String(format: "%.1f", sleep))
+                        }
+                    )
+                }
+            }
+        }
+        .padding(16)
+        .padding(.bottom, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 24)
+        .sheet(item: $shownInfo) { ctx in
+            MetricInfoSheet(info: ctx.info, currentValue: ctx.rawValue)
+                .presentationDetents([.large])
+        }
     }
 }
 
@@ -814,6 +861,7 @@ private struct StatCardRecovery: View {
 
 private struct StatCardNutrition: View {
     let s: DayStats
+    @State private var shownInfo: MetricInfoContext? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -823,15 +871,32 @@ private struct StatCardNutrition: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 if let kcal = s.foodCalories {
-                    Text("\(kcal) kcal")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.primary)
+                    Button {
+                        shownInfo = MetricInfoContext(info: MetricInfo.calories(value: kcal), rawValue: "\(kcal)")
+                    } label: {
+                        HStack(spacing: 3) {
+                            Text("\(kcal) kcal")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.primary)
+                            Image(systemName: "info.circle")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
             HStack(spacing: 0) {
                 if let p = s.protein {
-                    MetricColumn(value: "\(p)g", label: "protein", color: Theme.blue)
+                    MetricColumn(
+                        value: "\(p)g",
+                        label: "protein",
+                        color: Theme.blue,
+                        onInfo: {
+                            shownInfo = MetricInfoContext(info: MetricInfo.protein(value: p), rawValue: "\(p)")
+                        }
+                    )
                 }
                 if let c = s.carbs {
                     if s.protein != nil { Divider().frame(height: 36) }
@@ -848,6 +913,10 @@ private struct StatCardNutrition: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 24)
+        .sheet(item: $shownInfo) { ctx in
+            MetricInfoSheet(info: ctx.info, currentValue: ctx.rawValue)
+                .presentationDetents([.large])
+        }
     }
 }
 

@@ -258,3 +258,55 @@ export async function summarizeConversation(messages) {
 
   return completion.choices[0]?.message?.content?.trim() ?? null;
 }
+
+// ── Learn insight ─────────────────────────────────────────────────────────────
+
+const LEARN_SYSTEM_PROMPT = `You are a health science educator for a fitness tracking app called Nudge.
+Write ONE educational health insight (3-4 sentences) that:
+- Directly connects to the user's actual metrics provided
+- Explains the biological or physiological science behind what their numbers mean
+- Is grounded ONLY in established scientific consensus (NIH, WHO, AHA, peer-reviewed meta-analyses)
+- Ends with one specific, actionable takeaway relevant to today
+
+Rules:
+- Focus on ONE metric or pattern — the most interesting or actionable given the data
+- Never speculate or cite unproven/controversial claims
+- Use phrases like "research shows" or "studies suggest", never frame as medical advice
+- Plain, warm, conversational tone — 3-4 sentences maximum, no lists, no headers
+- Do not repeat the metric value robotically; weave it in naturally`;
+
+/**
+ * Generate a personalised educational health insight based on today's metrics.
+ * @param {object} metrics — { restingHR, hrv, sleepHours, steps, recoveryScore, recoveryLabel, goal }
+ * @param {string|null} profileSummary
+ * @returns {string}
+ */
+export async function generateLearnInsight(metrics = {}, profileSummary = null) {
+  const { restingHR, hrv, sleepHours, steps, recoveryScore, recoveryLabel, goal } = metrics;
+  const parts = [];
+  if (recoveryScore != null) parts.push(`Recovery score: ${recoveryScore}/100 (${recoveryLabel ?? ''})`);
+  if (restingHR    != null) parts.push(`Resting heart rate: ${restingHR} BPM`);
+  if (hrv          != null) parts.push(`HRV: ${hrv}ms`);
+  if (sleepHours   != null) parts.push(`Sleep last night: ${Number(sleepHours).toFixed(1)} hours`);
+  if (steps        != null) parts.push(`Steps today: ${Number(steps).toLocaleString()}`);
+  if (goal)                 parts.push(`User goal: ${goal.replace(/_/g, ' ')}`);
+  if (profileSummary)       parts.push(profileSummary);
+
+  const userPrompt = parts.length > 0
+    ? `Today's data:\n${parts.join('\n')}\n\nWrite today's health insight.`
+    : 'Write a general health insight about movement, recovery, or nutrition.';
+
+  const completion = await client().chat.completions.create({
+    model: 'llama-3.1-8b-instant',
+    messages: [
+      { role: 'system', content: LEARN_SYSTEM_PROMPT },
+      { role: 'user', content: userPrompt },
+    ],
+    max_tokens: 120,
+    temperature: 0.7,
+  });
+
+  const message = completion.choices[0]?.message?.content?.trim();
+  if (!message) throw new Error('Groq returned empty learn insight');
+  return message;
+}

@@ -178,6 +178,7 @@ struct TodayDoneView: View {
     @Query private var allEntries: [Entry]
     @State private var todaySteps: Int? = nil
     @State private var recoveryScore: RecoveryScore? = nil
+    @State private var learnInsight: String? = nil
 
     private let activityLabels: [String: String] = [
         "walk": "🚶 Walk",
@@ -337,6 +338,30 @@ struct TodayDoneView: View {
         )
     }
 
+    @ViewBuilder
+    private var learnInsightCard: some View {
+        if let text = learnInsight {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Today's Insight", systemImage: "lightbulb.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.yellow)
+                Text(text)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineSpacing(3)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.yellow.opacity(0.25), lineWidth: 1)
+            )
+        }
+    }
+
     private var accentColor: Color {
         entry.didMove
             ? (colorScheme == .dark ? Color(hex: "52D990") : Theme.green)
@@ -383,6 +408,9 @@ struct TodayDoneView: View {
 
                     // ── Details card (streak + steps + chips + note) ─────────────
                     detailsCard
+
+                    // ── Daily learn insight ───────────────────────────────────────
+                    learnInsightCard
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
@@ -399,6 +427,16 @@ struct TodayDoneView: View {
                 rhr:        recovery.restingHR,
                 hrv:        recovery.hrv,
                 sleepHours: stats?.sleepHours
+            )
+
+            // Fetch daily learn insight (cached per day)
+            learnInsight = try? await BackendService.fetchLearnInsight(
+                restingHR:     recovery.restingHR,
+                hrv:           recovery.hrv,
+                sleepHours:    stats?.sleepHours,
+                steps:         stats?.steps,
+                recoveryScore: recoveryScore?.value,
+                recoveryLabel: recoveryScore?.label
             )
 
             // Milestone detection: store significant streaks in Supermemory once per occurrence

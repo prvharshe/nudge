@@ -228,6 +228,55 @@ enum BackendService {
         _ = try? await URLSession.shared.data(for: request)
     }
 
+    // MARK: - Fetch daily learn insight (cached per day in UserDefaults)
+
+    static func fetchLearnInsight(
+        restingHR:     Int?    = nil,
+        hrv:           Int?    = nil,
+        sleepHours:    Double? = nil,
+        steps:         Int?    = nil,
+        recoveryScore: Int?    = nil,
+        recoveryLabel: String? = nil
+    ) async throws -> String {
+        let today = ISO8601DateFormatter().string(from: Calendar.current.startOfDay(for: .now))
+        let cacheDate = UserDefaults.standard.string(forKey: "nudge.learnInsight.date") ?? ""
+        if cacheDate == today,
+           let cached = UserDefaults.standard.string(forKey: "nudge.learnInsight.text"), !cached.isEmpty {
+            return cached
+        }
+
+        guard let url = URL(string: "\(baseURL)/api/learn") else { throw URLError(.badURL) }
+
+        var body: [String: Any] = ["userId": UserService.userId]
+        if let v = restingHR     { body["restingHR"]     = v }
+        if let v = hrv           { body["hrv"]           = v }
+        if let v = sleepHours    { body["sleepHours"]    = v }
+        if let v = steps         { body["steps"]         = v }
+        if let v = recoveryScore { body["recoveryScore"] = v }
+        if let v = recoveryLabel { body["recoveryLabel"] = v }
+
+        let goal = UserDefaults.standard.string(forKey: "nudge.userGoal") ?? ""
+        if !goal.isEmpty { body["goal"] = goal }
+        let profile = UserProfile.summary
+        if !profile.isEmpty { body["profileSummary"] = profile }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 15
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+
+        let json = try JSONDecoder().decode(LearnResponse.self, from: data)
+        UserDefaults.standard.set(today,       forKey: "nudge.learnInsight.date")
+        UserDefaults.standard.set(json.insight, forKey: "nudge.learnInsight.text")
+        return json.insight
+    }
+
     // MARK: - Delete all Supermemory entries for this user
     static func deleteSupermemoryData() async throws -> (deleted: Int, failed: Int) {
         let userId = UserService.userId
@@ -268,4 +317,8 @@ private struct WeeklyResponse: Decodable {
 private struct DeleteResponse: Decodable {
     let deleted: Int
     let failed: Int
+}
+
+private struct LearnResponse: Decodable {
+    let insight: String
 }
