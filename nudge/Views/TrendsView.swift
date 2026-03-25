@@ -14,31 +14,106 @@ struct TrendsView: View {
     @State private var nutrition = NutritionAvg()
     @State private var isLoading = true
 
+    private let minimumEntries = 5
+    private var isUnlocked: Bool { allEntries.count >= minimumEntries }
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 18) {
-                    if isLoading {
-                        ProgressView("Loading health data…")
-                            .padding(.top, 60)
-                    } else {
-                        overviewCard
-                        calendarCard
-                        if !weekdayData.isEmpty { dayPatternCard }
-                        if !stepHistory.isEmpty { stepTrendCard }
-                        if sleepOnMovedDays != nil || sleepOnRestDays != nil { sleepCard }
-                        if !rhrHistory.isEmpty { recoveryCard }
-                        if nutrition.hasData { nutritionCard }
+            if isUnlocked {
+                ScrollView {
+                    VStack(spacing: 18) {
+                        if isLoading {
+                            ProgressView("Loading health data…")
+                                .padding(.top, 60)
+                        } else {
+                            overviewCard
+                            calendarCard
+                            if !weekdayData.isEmpty { dayPatternCard }
+                            if !stepHistory.isEmpty { stepTrendCard }
+                            if sleepOnMovedDays != nil || sleepOnRestDays != nil { sleepCard }
+                            if !rhrHistory.isEmpty { recoveryCard }
+                            if nutrition.hasData { nutritionCard }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 40)
+                }
+                .navigationTitle("Trends")
+                .navigationBarTitleDisplayMode(.large)
+                .task { await loadData() }
+            } else {
+                lockedState
+                    .navigationTitle("Trends")
+                    .navigationBarTitleDisplayMode(.large)
+            }
+        }
+    }
+
+    // MARK: - Locked state
+
+    private var lockedState: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            VStack(spacing: 28) {
+                VStack(spacing: 14) {
+                    Text("📈")
+                        .font(.system(size: 52))
+
+                    VStack(spacing: 8) {
+                        Text("Patterns need time")
+                            .font(.system(.title2, design: .rounded).weight(.bold))
+                            .multilineTextAlignment(.center)
+
+                        Text("Log \(minimumEntries) days of check-ins and Trends will start showing your movement patterns, step history, sleep correlation, and more.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(3)
+                            .padding(.horizontal, 16)
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 40)
+
+                // Progress dots
+                VStack(spacing: 12) {
+                    HStack(spacing: 10) {
+                        ForEach(0..<minimumEntries, id: \.self) { i in
+                            ZStack {
+                                Circle()
+                                    .fill(i < allEntries.count ? Theme.green : Theme.card)
+                                    .frame(width: 18, height: 18)
+                                    .overlay(
+                                        Circle().stroke(
+                                            i < allEntries.count
+                                                ? Theme.green.opacity(0.4)
+                                                : Theme.blue.opacity(0.2),
+                                            lineWidth: 1
+                                        )
+                                    )
+
+                                if i < allEntries.count {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
+                            }
+                        }
+                    }
+
+                    Text(allEntries.isEmpty
+                         ? "No check-ins yet — start tonight"
+                         : "\(allEntries.count) of \(minimumEntries) days logged")
+                        .font(.system(.subheadline, design: .rounded).weight(.medium))
+                        .foregroundStyle(allEntries.isEmpty ? .secondary : .primary)
+                }
             }
-            .navigationTitle("Trends")
-            .navigationBarTitleDisplayMode(.large)
+            .padding(.horizontal, 32)
+
+            Spacer()
+            Spacer()
         }
-        .task { await loadData() }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Data loading
