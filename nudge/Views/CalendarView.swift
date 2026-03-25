@@ -45,6 +45,11 @@ struct CalendarView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
             }
+            .refreshable {
+                loadWeeklySteps()
+                loadMissedDays()
+                loadOrGenerateInsight()
+            }
             .navigationTitle("History")
             .navigationBarTitleDisplayMode(.large)
         }
