@@ -181,12 +181,16 @@ struct CalendarView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
+            let movedDates = Set(entries.filter { $0.didMove }
+                .map { calendar.startOfDay(for: $0.date) })
             Chart(weeklySteps, id: \.date) { item in
                 BarMark(
                     x: .value("Day", item.date, unit: .day),
                     y: .value("Steps", item.steps)
                 )
-                .foregroundStyle(item.steps >= 4000 ? Theme.green : Theme.muted)
+                .foregroundStyle(
+                    movedDates.contains(calendar.startOfDay(for: item.date)) ? Theme.green : Theme.muted
+                )
                 .cornerRadius(4)
             }
             .chartXAxis {

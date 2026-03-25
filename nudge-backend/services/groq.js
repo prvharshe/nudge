@@ -302,7 +302,7 @@ export async function generateLearnInsight(metrics = {}, profileSummary = null) 
       { role: 'system', content: LEARN_SYSTEM_PROMPT },
       { role: 'user', content: userPrompt },
     ],
-    max_tokens: 120,
+    max_tokens: 200,
     temperature: 0.7,
   });
 
