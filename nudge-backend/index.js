@@ -8,6 +8,7 @@ import reactionRouter from './routes/reaction.js';
 import weeklyRouter from './routes/weekly.js';
 import memoriesRouter from './routes/memories.js';
 import learnRouter from './routes/learn.js';
+import reportsRouter from './routes/reports.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3000;
@@ -24,6 +25,7 @@ app.use('/api/reaction', reactionRouter);
 app.use('/api/weekly', weeklyRouter);
 app.use('/api/memories', memoriesRouter);
 app.use('/api/learn', learnRouter);
+app.use('/api/reports', reportsRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -40,5 +42,7 @@ app.listen(PORT, () => {
   console.log(`  POST /api/memories  — store typed memory`);
   console.log(`  POST /api/memories/summarize-convo — store conversation summary`);
   console.log(`  POST /api/learn     — daily educational health insight`);
+  console.log(`  POST /api/reports/upload — upload & analyse health report`);
+  console.log(`  GET  /api/reports/list   — list past report uploads`);
   console.log(`  GET  /api/health    — health check`);
 });

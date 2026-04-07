@@ -30,12 +30,18 @@ struct CoachView: View {
 
     private let storageKey = "nudge.coachMessages"
     private let minimumEntries = 5
-    private let suggestions = [
-        "Why do I keep skipping certain days?",
-        "What patterns do you see in my data?",
-        "How has my consistency been lately?",
-        "What activities do I do most often?"
-    ]
+    private var suggestions: [String] {
+        var base = [
+            "Why do I keep skipping certain days?",
+            "What patterns do you see in my data?",
+            "How has my consistency been lately?",
+            "What activities do I do most often?"
+        ]
+        if UserDefaults.standard.string(forKey: "nudge.lastReportDate") != nil {
+            base.insert("What does my blood report say about my fitness?", at: 0)
+        }
+        return base
+    }
 
     private var isUnlocked: Bool { allEntries.count >= minimumEntries }
 

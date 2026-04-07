@@ -277,6 +277,114 @@ enum BackendService {
         return json.insight
     }
 
+    // MARK: - Upload and analyse a health report
+
+    struct ReportResult {
+        let insights: [String]
+        let biomarkers: [String: BiomarkerEntry]
+        let reportDate: String
+    }
+
+    struct BiomarkerEntry: Decodable {
+        let name: String
+        let value: String          // kept as String — could be "14.2" or "<5"
+        let unit: String?
+        let status: String?        // "normal" | "low" | "high" | "borderline"
+        let reference: String?
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            name      = try c.decode(String.self, forKey: .name)
+            // value can be number or string in the JSON
+            if let d = try? c.decode(Double.self, forKey: .value) {
+                value = d.truncatingRemainder(dividingBy: 1) == 0
+                    ? String(Int(d)) : String(d)
+            } else {
+                value = (try? c.decode(String.self, forKey: .value)) ?? ""
+            }
+            unit      = try? c.decode(String.self, forKey: .unit)
+            status    = try? c.decode(String.self, forKey: .status)
+            reference = try? c.decode(String.self, forKey: .reference)
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name, value, unit, status, reference
+        }
+    }
+
+    static func uploadReport(
+        data: Data,
+        filename: String,
+        mimeType: String,
+        hkMetrics: [String: Any] = [:]
+    ) async throws -> ReportResult {
+        guard let url = URL(string: "\(baseURL)/api/reports/upload") else {
+            throw URLError(.badURL)
+        }
+
+        let boundary = UUID().uuidString
+        var body = Data()
+
+        func append(_ string: String) {
+            if let d = string.data(using: .utf8) { body.append(d) }
+        }
+
+        // userId field
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"userId\"\r\n\r\n")
+        append("\(UserService.userId)\r\n")
+
+        // hkMetrics field
+        if let metricsJSON = try? JSONSerialization.data(withJSONObject: hkMetrics),
+           let metricsStr = String(data: metricsJSON, encoding: .utf8) {
+            append("--\(boundary)\r\n")
+            append("Content-Disposition: form-data; name=\"hkMetrics\"\r\n\r\n")
+            append("\(metricsStr)\r\n")
+        }
+
+        // profileSummary field
+        let profile = UserProfile.summary
+        if !profile.isEmpty {
+            append("--\(boundary)\r\n")
+            append("Content-Disposition: form-data; name=\"profileSummary\"\r\n\r\n")
+            append("\(profile)\r\n")
+        }
+
+        // file field
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n")
+        append("Content-Type: \(mimeType)\r\n\r\n")
+        body.append(data)
+        append("\r\n--\(boundary)--\r\n")
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        request.timeoutInterval = 60
+
+        let (responseData, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            if let json = try? JSONDecoder().decode([String: String].self, from: responseData),
+               let errMsg = json["error"] {
+                throw NSError(domain: "ReportUpload", code: 0, userInfo: [NSLocalizedDescriptionKey: errMsg])
+            }
+            throw URLError(.badServerResponse)
+        }
+
+        let json = try JSONDecoder().decode(ReportUploadResponse.self, from: responseData)
+
+        // Save report date to UserDefaults for Coach suggestion chip
+        let today = ISO8601DateFormatter().string(from: .now)
+        UserDefaults.standard.set(today, forKey: "nudge.lastReportDate")
+
+        return ReportResult(
+            insights: json.insights,
+            biomarkers: json.biomarkers ?? [:],
+            reportDate: json.reportDate
+        )
+    }
+
     // MARK: - Delete all Supermemory entries for this user
     static func deleteSupermemoryData() async throws -> (deleted: Int, failed: Int) {
         let userId = UserService.userId
@@ -321,4 +429,11 @@ private struct DeleteResponse: Decodable {
 
 private struct LearnResponse: Decodable {
     let insight: String
+}
+
+private struct ReportUploadResponse: Decodable {
+    let ok: Bool
+    let insights: [String]
+    let biomarkers: [String: BackendService.BiomarkerEntry]?
+    let reportDate: String
 }

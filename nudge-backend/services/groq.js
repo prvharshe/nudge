@@ -310,3 +310,102 @@ export async function generateLearnInsight(metrics = {}, profileSummary = null) 
   if (!message) throw new Error('Groq returned empty learn insight');
   return message;
 }
+
+// ── Health Report: Biomarker Extraction ──────────────────────────────────────
+
+export { client };
+
+/**
+ * Parse raw report text into structured biomarker JSON.
+ * Returns an object like: { vitamin_d: { value: 18, unit: 'ng/mL', status: 'low', name: 'Vitamin D' }, ... }
+ * @param {string} reportText
+ * @returns {object}
+ */
+export async function extractBiomarkers(reportText) {
+  const completion = await client().chat.completions.create({
+    model: 'llama-3.1-8b-instant',
+    messages: [
+      {
+        role: 'system',
+        content: `You are a medical data parser. Extract all lab test results from the text.
+Return ONLY valid JSON — an object where each key is a snake_case biomarker name.
+Each value must have: { "name": string, "value": number|string, "unit": string, "status": "normal"|"low"|"high"|"borderline"|"unknown", "reference": string }
+If a field is not present, omit it. Do not include any explanation or markdown — only the JSON object.`,
+      },
+      {
+        role: 'user',
+        content: `Extract all biomarkers from this health report:\n\n${reportText.slice(0, 6000)}`,
+      },
+    ],
+    max_tokens: 1000,
+    temperature: 0.1,
+  });
+
+  const raw = completion.choices[0]?.message?.content?.trim() ?? '{}';
+  // Strip markdown code fences if present
+  const cleaned = raw.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    return {};
+  }
+}
+
+// ── Health Report: Insight Generation ────────────────────────────────────────
+
+const REPORT_INSIGHT_SYSTEM_PROMPT = `You are a health educator for a fitness tracking app.
+The user has uploaded a blood or health report. You have their lab results AND their fitness data (steps, sleep, HRV, recovery).
+
+Write exactly 5-7 bullet point insights. Each bullet must:
+- Start with a bold **Marker Name** or **Pattern** label
+- Connect the lab finding directly to the user's fitness/movement data where possible
+- Explain the science in 1-2 plain sentences (NIH/WHO/AHA level evidence only)
+- End with ONE specific, actionable suggestion for today or this week
+
+Format as a plain list — one bullet per line, starting with "•". No headers, no markdown beyond the bold labels, no medical advice framing. Use "research suggests" or "studies show" rather than definitive claims.`;
+
+/**
+ * Generate personalised bullet-point insights from biomarkers + health context.
+ * @param {object} biomarkers — structured output from extractBiomarkers()
+ * @param {object} hkMetrics — { steps, sleepHours, restingHR, hrv, recoveryScore, recoveryLabel }
+ * @param {string[]} memories — recent Supermemory entries for context
+ * @param {string|null} profileSummary
+ * @returns {string[]} — array of bullet strings (without the leading "•")
+ */
+export async function generateReportInsights(biomarkers = {}, hkMetrics = {}, memories = [], profileSummary = null) {
+  const bioLines = Object.values(biomarkers).map(b =>
+    `${b.name}: ${b.value}${b.unit ? ' ' + b.unit : ''} — ${b.status}${b.reference ? ` (ref: ${b.reference})` : ''}`
+  ).join('\n');
+
+  const hkLines = [];
+  if (hkMetrics.recoveryScore != null) hkLines.push(`Recovery score: ${hkMetrics.recoveryScore}/100 (${hkMetrics.recoveryLabel ?? ''})`);
+  if (hkMetrics.restingHR != null)     hkLines.push(`Resting HR: ${hkMetrics.restingHR} BPM`);
+  if (hkMetrics.hrv != null)           hkLines.push(`HRV: ${hkMetrics.hrv}ms`);
+  if (hkMetrics.sleepHours != null)    hkLines.push(`Sleep: ${Number(hkMetrics.sleepHours).toFixed(1)} hrs`);
+  if (hkMetrics.steps != null)         hkLines.push(`Steps today: ${Number(hkMetrics.steps).toLocaleString()}`);
+
+  const memSection = memories.length > 0
+    ? `\nRecent activity history:\n${memories.slice(0, 5).join('\n')}`
+    : '';
+  const profileSection = profileSummary ? `\nUser profile: ${profileSummary}` : '';
+
+  const userPrompt = `Lab results:\n${bioLines || 'No structured biomarkers found — provide general wellness insights.'}\n\nFitness data:\n${hkLines.join('\n') || 'No fitness data available.'}${memSection}${profileSection}\n\nWrite 5-7 personalised insights.`;
+
+  const completion = await client().chat.completions.create({
+    model: 'llama-3.1-8b-instant',
+    messages: [
+      { role: 'system', content: REPORT_INSIGHT_SYSTEM_PROMPT },
+      { role: 'user', content: userPrompt },
+    ],
+    max_tokens: 600,
+    temperature: 0.65,
+  });
+
+  const text = completion.choices[0]?.message?.content?.trim() ?? '';
+  // Split on bullet markers and clean up
+  return text
+    .split('\n')
+    .filter(l => l.trim().startsWith('•'))
+    .map(l => l.replace(/^•\s*/, '').trim())
+    .filter(Boolean);
+}

@@ -17,6 +17,13 @@ struct SettingsView: View {
     }
 
     @State private var showAddActivitySheet = false
+    @State private var showUploadReport = false
+
+    private var lastReportDate: String? {
+        guard let iso = UserDefaults.standard.string(forKey: "nudge.lastReportDate"),
+              let date = ISO8601DateFormatter().date(from: iso) else { return nil }
+        return date.formatted(date: .abbreviated, time: .omitted)
+    }
 
     // Reset local data state
     @State private var showResetConfirm = false
@@ -103,6 +110,33 @@ struct SettingsView: View {
                 }
                 .sheet(isPresented: $showAddActivitySheet) {
                     AddActivitySheet()
+                }
+
+                // MARK: - Health reports section
+                Section {
+                    if let date = lastReportDate {
+                        HStack {
+                            Label("Last uploaded", systemImage: "doc.text.fill")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Text(date)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Button {
+                        showUploadReport = true
+                    } label: {
+                        Label("Upload health report", systemImage: "doc.badge.plus")
+                            .foregroundStyle(Theme.blue)
+                    }
+                } header: {
+                    Text("Health reports")
+                } footer: {
+                    Text("Upload blood tests or lab reports. Biomarkers are extracted and saved to your Coach memory for personalised insights.")
+                }
+                .sheet(isPresented: $showUploadReport) {
+                    UploadReportView()
                 }
 
                 // MARK: - Info section

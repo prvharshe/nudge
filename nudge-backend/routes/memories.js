@@ -3,7 +3,7 @@ import { addMemory } from '../services/supermemory.js';
 import { summarizeConversation } from '../services/groq.js';
 
 const router = Router();
-const VALID_TYPES = new Set(['profile', 'insight', 'milestone', 'convo', 'context']);
+const VALID_TYPES = new Set(['profile', 'insight', 'milestone', 'convo', 'context', 'report']);
 
 /**
  * POST /api/memories
