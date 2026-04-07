@@ -1,19 +1,19 @@
-import { PDFParse } from 'pdf-parse';
+import { createRequire } from 'module';
 import Groq from 'groq-sdk';
 
+// pdf-parse v1 is CommonJS — use createRequire for ESM compatibility.
+// v1 has no DOM dependencies and works in any Node.js environment.
+const require = createRequire(import.meta.url);
+const pdfParse = require('pdf-parse');
+
 /**
- * Extract raw text from a PDF buffer using pdf-parse v2.
+ * Extract raw text from a PDF buffer using pdf-parse v1.
  * @param {Buffer} buffer
  * @returns {string}
  */
 async function extractPdfText(buffer) {
-  const parser = new PDFParse({ data: buffer });
-  try {
-    const result = await parser.getText();
-    return result.text?.trim() ?? '';
-  } finally {
-    await parser.destroy();
-  }
+  const result = await pdfParse(buffer);
+  return result.text?.trim() ?? '';
 }
 
 /**
