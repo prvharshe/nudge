@@ -108,9 +108,6 @@ struct SettingsView: View {
                 } footer: {
                     Text("Appear alongside Walk, Run, Tired, and Busy when logging a check-in.")
                 }
-                .sheet(isPresented: $showAddActivitySheet) {
-                    AddActivitySheet()
-                }
 
                 // MARK: - Health reports section
                 Section {
@@ -134,9 +131,6 @@ struct SettingsView: View {
                     Text("Health reports")
                 } footer: {
                     Text("Upload blood tests or lab reports. Biomarkers are extracted and saved to your Coach memory for personalised insights.")
-                }
-                .sheet(isPresented: $showUploadReport) {
-                    UploadReportView()
                 }
 
                 // MARK: - Info section
@@ -299,6 +293,12 @@ struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+            .sheet(isPresented: $showAddActivitySheet) {
+                AddActivitySheet()
+            }
+            .sheet(isPresented: $showUploadReport) {
+                UploadReportView()
             }
         }
     }
