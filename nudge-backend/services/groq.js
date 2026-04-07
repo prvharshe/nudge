@@ -313,8 +313,6 @@ export async function generateLearnInsight(metrics = {}, profileSummary = null) 
 
 // ── Health Report: Biomarker Extraction ──────────────────────────────────────
 
-export { client };
-
 /**
  * Parse raw report text into structured biomarker JSON.
  * Returns an object like: { vitamin_d: { value: 18, unit: 'ng/mL', status: 'low', name: 'Vitamin D' }, ... }

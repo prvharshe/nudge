@@ -1,14 +1,19 @@
-import pdfParse from 'pdf-parse/lib/pdf-parse.js';
-import { client } from './groq.js';
+import { PDFParse } from 'pdf-parse';
+import Groq from 'groq-sdk';
 
 /**
- * Extract raw text from a PDF buffer.
+ * Extract raw text from a PDF buffer using pdf-parse v2.
  * @param {Buffer} buffer
  * @returns {string}
  */
 async function extractPdfText(buffer) {
-  const result = await pdfParse(buffer);
-  return result.text?.trim() ?? '';
+  const parser = new PDFParse({ data: buffer });
+  try {
+    const result = await parser.getText();
+    return result.text?.trim() ?? '';
+  } finally {
+    await parser.destroy();
+  }
 }
 
 /**
@@ -18,10 +23,11 @@ async function extractPdfText(buffer) {
  * @returns {string}
  */
 async function extractImageText(buffer, mimeType) {
+  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
   const base64 = buffer.toString('base64');
   const dataUrl = `data:${mimeType};base64,${base64}`;
 
-  const completion = await client().chat.completions.create({
+  const completion = await groq.chat.completions.create({
     model: 'meta-llama/llama-4-scout-17b-16e-instruct',
     messages: [
       {

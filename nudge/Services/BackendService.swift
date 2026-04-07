@@ -365,11 +365,13 @@ enum BackendService {
 
         let (responseData, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            if let json = try? JSONDecoder().decode([String: String].self, from: responseData),
-               let errMsg = json["error"] {
-                throw NSError(domain: "ReportUpload", code: 0, userInfo: [NSLocalizedDescriptionKey: errMsg])
-            }
-            throw URLError(.badServerResponse)
+            // Try to surface the actual server error message
+            let serverMsg = (try? JSONSerialization.jsonObject(with: responseData) as? [String: Any])
+                .flatMap { $0["error"] as? String }
+                ?? String(data: responseData, encoding: .utf8)?.prefix(300).description
+                ?? "Server error"
+            throw NSError(domain: "ReportUpload", code: (response as? HTTPURLResponse)?.statusCode ?? 0,
+                          userInfo: [NSLocalizedDescriptionKey: serverMsg])
         }
 
         let json = try JSONDecoder().decode(ReportUploadResponse.self, from: responseData)
