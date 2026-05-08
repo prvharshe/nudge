@@ -44,7 +44,9 @@ struct CalendarView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
+                .padding(.bottom, 32)
             }
+            .background(AmbientBackground())
             .refreshable {
                 loadWeeklySteps()
                 loadMissedDays()
@@ -104,8 +106,7 @@ struct CalendarView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .background(Theme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .surfaceCard(cornerRadius: 14)
             }
         }
     }
@@ -173,8 +174,7 @@ struct CalendarView: View {
             }
         }
         .padding(16)
-        .background(Theme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .surfaceCard(cornerRadius: 14)
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Theme.brandBorderGradient, lineWidth: 1)
@@ -234,8 +234,7 @@ struct CalendarView: View {
             }
         }
         .padding(16)
-        .background(Theme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .surfaceCard(cornerRadius: 14)
     }
 
     // MARK: - Month navigation header
@@ -450,7 +449,7 @@ struct DayCell: View {
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(isToday ? Theme.blue.opacity(0.12) : Color.clear)
+                .fill(isToday ? Theme.warmGlow : Color.clear)
         )
     }
 }
@@ -506,8 +505,8 @@ struct EntryDetailView: View {
                                     .font(.subheadline)
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 7)
-                                    .background(Theme.card)
-                                    .clipShape(Capsule())
+                                    .background(Theme.glassSurface, in: Capsule())
+                                    .overlay(Capsule().stroke(Theme.hairline, lineWidth: 1))
                             }
                         }
                         .frame(maxWidth: .infinity)
@@ -549,12 +548,13 @@ struct EntryDetailView: View {
                 .padding(.bottom, 32)
                 .animation(.easeInOut(duration: 0.25), value: stats != nil)
             }
+            .background(AmbientBackground())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Edit") { showEditSheet = true }
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Theme.blue)
+                        .foregroundStyle(Theme.brandCoral)
                 }
             }
         }
@@ -616,7 +616,7 @@ struct EditEntryView: View {
                                 }
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 10)
-                                .background(didMove ? Theme.green.opacity(0.15) : Theme.card)
+                                .background(didMove ? Theme.green.opacity(0.15) : Theme.glassSurface)
                                 .foregroundStyle(didMove ? Theme.green : .secondary)
                                 .clipShape(Capsule())
                                 .overlay(Capsule().stroke(didMove ? Theme.green.opacity(0.4) : Color.clear, lineWidth: 1.5))
@@ -634,7 +634,7 @@ struct EditEntryView: View {
                                 }
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 10)
-                                .background(!didMove ? Theme.muted.opacity(0.2) : Theme.card)
+                                .background(!didMove ? Theme.muted.opacity(0.2) : Theme.glassSurface)
                                 .foregroundStyle(!didMove ? Theme.muted : .secondary)
                                 .clipShape(Capsule())
                                 .overlay(Capsule().stroke(!didMove ? Theme.muted.opacity(0.5) : Color.clear, lineWidth: 1.5))
@@ -680,9 +680,7 @@ struct EditEntryView: View {
                                 }
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 10)
-                                .background(Theme.card)
-                                .foregroundStyle(.secondary)
-                                .clipShape(Capsule())
+                                .nocturneSecondaryButton(cornerRadius: 18)
                             }
                             .buttonStyle(.plain)
                         }
@@ -702,15 +700,14 @@ struct EditEntryView: View {
                             .lineLimit(3, reservesSpace: true)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 14)
-                            .background(Theme.card)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .surfaceCard(cornerRadius: 14)
                     }
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 24)
                 .padding(.bottom, 40)
             }
-            .background(Theme.background.ignoresSafeArea())
+            .background(AmbientBackground())
             .navigationTitle("Edit Entry")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -723,7 +720,7 @@ struct EditEntryView: View {
                         saveChanges()
                     }
                     .fontWeight(.semibold)
-                    .foregroundStyle(Theme.blue)
+                    .foregroundStyle(Theme.brandCoral)
                     .disabled(isSaving)
                 }
             }
@@ -839,7 +836,7 @@ private struct StatCardMovement: View {
         .padding(16)
         .padding(.bottom, 20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+        .surfaceCard(cornerRadius: 16)
         .padding(.horizontal, 24)
         .sheet(item: $shownInfo) { ctx in
             MetricInfoSheet(info: ctx.info, currentValue: ctx.rawValue)
@@ -898,7 +895,7 @@ private struct StatCardRecovery: View {
         .padding(16)
         .padding(.bottom, 20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+        .surfaceCard(cornerRadius: 16)
         .padding(.horizontal, 24)
         .sheet(item: $shownInfo) { ctx in
             MetricInfoSheet(info: ctx.info, currentValue: ctx.rawValue)
@@ -961,7 +958,7 @@ private struct StatCardNutrition: View {
         .padding(16)
         .padding(.bottom, 20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+        .surfaceCard(cornerRadius: 16)
         .padding(.horizontal, 24)
         .sheet(item: $shownInfo) { ctx in
             MetricInfoSheet(info: ctx.info, currentValue: ctx.rawValue)

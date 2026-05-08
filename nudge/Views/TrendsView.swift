@@ -39,6 +39,7 @@ struct TrendsView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 40)
                 }
+                .background(AmbientBackground())
                 .navigationTitle("Trends")
                 .navigationBarTitleDisplayMode(.large)
                 .task { await loadData() }
@@ -115,6 +116,7 @@ struct TrendsView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AmbientBackground())
     }
 
     // MARK: - Data loading
@@ -520,7 +522,7 @@ private struct TrendCard<Content: View>: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .surfaceCard()
     }
 }
 

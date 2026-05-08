@@ -70,15 +70,12 @@ struct ReportInsightSheet: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .padding(.horizontal, 20)
-                    .background(Theme.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Theme.purple.opacity(0.2), lineWidth: 1)
-                    )
+                    .surfaceCard(cornerRadius: 16)
                     .padding(.horizontal, 20)
                     .padding(.bottom, 32)
                 }
             }
+            .background(AmbientBackground())
             .navigationTitle("Report Insights")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -139,7 +136,7 @@ private struct BiomarkerChip: View {
         .background(statusColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(statusColor.opacity(0.2), lineWidth: 1)
+                .stroke(Theme.hairline, lineWidth: 1)
         )
         .frame(minWidth: 90)
     }
@@ -172,10 +169,6 @@ private struct InsightRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-        )
+        .surfaceCard(cornerRadius: 14)
     }
 }

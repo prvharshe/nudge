@@ -29,6 +29,28 @@ enum Theme {
         t.userInterfaceStyle == .dark ? UIColor(hex: "4B5563") : UIColor(hex: "9CA3AF")
     })
 
+    static let ink = Color(uiColor: UIColor { t in
+        t.userInterfaceStyle == .dark ? UIColor(hex: "07111F") : UIColor(hex: "F7F3EE")
+    })
+    static let surface = Color(uiColor: UIColor { t in
+        t.userInterfaceStyle == .dark ? UIColor(hex: "111B2D").withAlphaComponent(0.82) : UIColor.white.withAlphaComponent(0.72)
+    })
+    static let elevatedSurface = Color(uiColor: UIColor { t in
+        t.userInterfaceStyle == .dark ? UIColor(hex: "172238") : UIColor(hex: "FFFDFC")
+    })
+    static let glassSurface = Color(uiColor: UIColor { t in
+        t.userInterfaceStyle == .dark ? UIColor(hex: "1A2740").withAlphaComponent(0.62) : UIColor.white.withAlphaComponent(0.58)
+    })
+    static let hairline = Color(uiColor: UIColor { t in
+        t.userInterfaceStyle == .dark ? UIColor(hex: "FFF4E3").withAlphaComponent(0.13) : UIColor(hex: "182A4A").withAlphaComponent(0.09)
+    })
+    static let warmGlow = Color(uiColor: UIColor { t in
+        t.userInterfaceStyle == .dark ? UIColor(hex: "FF9637").withAlphaComponent(0.18) : UIColor(hex: "E78A78").withAlphaComponent(0.16)
+    })
+    static let secondaryText = Color(uiColor: UIColor { t in
+        t.userInterfaceStyle == .dark ? UIColor(hex: "A8B3C7") : UIColor(hex: "667085")
+    })
+
     static let brandNavy = Color(hex: "182A4A")
     static let brandCoral = Color(hex: "E78A78")
     static let brandAmber = Color(hex: "FF9637")
@@ -86,6 +108,111 @@ extension View {
                                   lineWidth: isSelected ? 1.5 : 0)
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    func surfaceCard(cornerRadius: CGFloat = 20, borderOpacity: Double = 1) -> some View {
+        self
+            .background {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Theme.glassSurface)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Theme.hairline.opacity(borderOpacity), lineWidth: 1)
+            }
+    }
+
+    func nocturnePrimaryButton(isEnabled: Bool = true, cornerRadius: CGFloat = 18) -> some View {
+        self
+            .background {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(isEnabled ? AnyShapeStyle(Theme.brandGradient) : AnyShapeStyle(Theme.muted.opacity(0.28)))
+            }
+            .foregroundStyle(.white)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .shadow(color: isEnabled ? Theme.warmGlow : .clear, radius: 14, y: 6)
+    }
+
+    func nocturneSecondaryButton(cornerRadius: CGFloat = 18) -> some View {
+        self
+            .background {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Theme.glassSurface)
+            }
+            .foregroundStyle(Theme.secondaryText)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Theme.hairline, lineWidth: 1)
+            }
+    }
+}
+
+// MARK: - Nocturne system views
+
+struct AmbientBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ZStack {
+            Theme.ink
+
+            LinearGradient(
+                colors: colorScheme == .dark
+                    ? [
+                        Color(hex: "07111F"),
+                        Color(hex: "101B31"),
+                        Theme.brandNavy.opacity(0.92),
+                        Theme.brandCoral.opacity(0.26),
+                        Theme.brandAmber.opacity(0.20)
+                    ]
+                    : [
+                        Color(hex: "FFFDFC"),
+                        Color(hex: "F8F2EC"),
+                        Theme.brandCream.opacity(0.86),
+                        Theme.brandCoral.opacity(0.18),
+                        Theme.brandAmber.opacity(0.16)
+                    ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            VStack(spacing: 0) {
+                Spacer()
+                LinearGradient(
+                    colors: [
+                        Color.clear,
+                        Theme.brandCoral.opacity(colorScheme == .dark ? 0.16 : 0.10),
+                        Theme.brandAmber.opacity(colorScheme == .dark ? 0.22 : 0.15)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(maxHeight: 260)
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
+struct GradientIconBadge: View {
+    let systemName: String
+    var size: CGFloat = 52
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Theme.brandGradientSoft)
+            Circle()
+                .strokeBorder(Theme.brandBorderGradient, lineWidth: 1)
+            Image(systemName: systemName)
+                .font(.system(size: size * 0.42, weight: .semibold))
+                .foregroundStyle(Theme.brandGradient)
+        }
+        .frame(width: size, height: size)
     }
 }
 

@@ -14,6 +14,9 @@ struct UploadReportView: View {
 
     var body: some View {
         NavigationStack {
+            ZStack {
+                AmbientBackground()
+
             VStack(spacing: 0) {
                 Spacer()
 
@@ -22,11 +25,11 @@ struct UploadReportView: View {
                     VStack(spacing: 16) {
                         ZStack {
                             Circle()
-                                .fill(Theme.blue.opacity(0.1))
+                                .fill(Theme.brandGradientSoft)
                                 .frame(width: 88, height: 88)
                             Image(systemName: "doc.text.magnifyingglass")
                                 .font(.system(size: 36))
-                                .foregroundStyle(Theme.blue)
+                                .foregroundStyle(Theme.brandGradient)
                         }
 
                         VStack(spacing: 8) {
@@ -93,14 +96,13 @@ struct UploadReportView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 17)
-                    .background(isUploading ? Theme.blue.opacity(0.6) : Theme.blue)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .nocturnePrimaryButton(isEnabled: !isUploading, cornerRadius: 16)
                 }
                 .buttonStyle(.plain)
                 .disabled(isUploading)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 32)
+            }
             }
             .navigationTitle("Health Report")
             .navigationBarTitleDisplayMode(.inline)
@@ -211,14 +213,13 @@ private struct FormatPill: View {
         VStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.caption)
-                .foregroundStyle(Theme.blue)
+                .foregroundStyle(Theme.brandCoral)
             Text(label)
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Theme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .surfaceCard(cornerRadius: 10)
     }
 }

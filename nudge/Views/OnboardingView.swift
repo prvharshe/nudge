@@ -19,6 +19,8 @@ struct OnboardingView: View {
 
     var body: some View {
         ZStack {
+            AmbientBackground()
+
             switch step {
             case .splash:
                 splashScreen
@@ -102,7 +104,7 @@ struct OnboardingView: View {
                     .font(.system(.body, design: .rounded).weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 18)
-                    .brandPrimaryButton()
+                    .nocturnePrimaryButton()
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 48)
@@ -138,8 +140,7 @@ struct OnboardingView: View {
                     .multilineTextAlignment(.center)
                     .padding(.vertical, 16)
                     .padding(.horizontal, 20)
-                    .background(Theme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .surfaceCard(cornerRadius: 16)
                     .onSubmit { advanceFromName() }
             }
             .padding(.horizontal, 32)
@@ -154,7 +155,7 @@ struct OnboardingView: View {
                     .font(.system(.body, design: .rounded).weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 18)
-                    .brandPrimaryButton(isEnabled: !nameInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .nocturnePrimaryButton(isEnabled: !nameInput.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .disabled(nameInput.trimmingCharacters(in: .whitespaces).isEmpty)
             .padding(.horizontal, 24)
@@ -232,7 +233,7 @@ struct OnboardingView: View {
                     .font(.system(.body, design: .rounded).weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 18)
-                    .brandPrimaryButton(isEnabled: selectedGoal != nil)
+                    .nocturnePrimaryButton(isEnabled: selectedGoal != nil)
             }
             .disabled(selectedGoal == nil)
             .padding(.horizontal, 24)
@@ -275,7 +276,7 @@ struct OnboardingView: View {
                                         .font(.system(.subheadline, design: .rounded).weight(.medium))
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 12)
-                                        .foregroundStyle(selectedSex == s ? Theme.blue : .primary)
+                                        .foregroundStyle(selectedSex == s ? Theme.brandCoral : .primary)
                                         .brandSelectedSurface(isSelected: selectedSex == s)
                                 }
                                 .buttonStyle(.plain)
@@ -341,7 +342,7 @@ struct OnboardingView: View {
                             .font(.system(.body, design: .rounded).weight(.semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 18)
-                            .brandPrimaryButton()
+                            .nocturnePrimaryButton()
                     }
 
                     Button {
@@ -404,8 +405,7 @@ struct OnboardingView: View {
                     NotificationPreviewRow(time: "10:00 AM", text: "Your morning nudge is ready ✨")
                 }
                 .padding(16)
-                .background(Theme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .surfaceCard(cornerRadius: 16)
             }
             .padding(.horizontal, 32)
 
@@ -424,7 +424,7 @@ struct OnboardingView: View {
                         .font(.system(.body, design: .rounded).weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 18)
-                        .brandPrimaryButton()
+                        .nocturnePrimaryButton()
                 }
 
                 Button {
@@ -520,8 +520,7 @@ private struct ProfileField: View {
             }
             .padding(.vertical, 12)
             .padding(.horizontal, 8)
-            .background(Theme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .surfaceCard(cornerRadius: 12)
         }
         .frame(maxWidth: .infinity)
     }

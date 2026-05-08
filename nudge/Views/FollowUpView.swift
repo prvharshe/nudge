@@ -49,6 +49,9 @@ struct FollowUpView: View {
     }
 
     private var mainContent: some View {
+        ZStack {
+            AmbientBackground()
+
         VStack(alignment: .leading, spacing: 0) {
             // Header
             VStack(alignment: .leading, spacing: 6) {
@@ -94,9 +97,7 @@ struct FollowUpView: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Theme.card)
-                    .foregroundStyle(.secondary)
-                    .clipShape(Capsule())
+                    .nocturneSecondaryButton(cornerRadius: 18)
                 }
                 .buttonStyle(.plain)
             }
@@ -110,8 +111,7 @@ struct FollowUpView: View {
                 .focused($noteFocused)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-                .background(Theme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .surfaceCard(cornerRadius: 14)
                 .padding(.horizontal, 24)
                 .padding(.top, 20)
 
@@ -135,10 +135,9 @@ struct FollowUpView: View {
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)
-                            .background(contextTag == chip.tag ? Color.orange.opacity(0.12) : Theme.card)
-                            .foregroundStyle(contextTag == chip.tag ? Color.orange : .secondary)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(contextTag == chip.tag ? Color.orange.opacity(0.4) : Color.clear, lineWidth: 1))
+                            .background(contextTag == chip.tag ? Theme.warmGlow : Theme.glassSurface, in: Capsule())
+                            .foregroundStyle(contextTag == chip.tag ? Theme.brandAmber : .secondary)
+                            .overlay(Capsule().stroke(contextTag == chip.tag ? Theme.brandAmber.opacity(0.4) : Theme.hairline, lineWidth: 1))
                         }
                         .buttonStyle(.plain)
                         .animation(.easeInOut(duration: 0.15), value: contextTag)
@@ -157,24 +156,20 @@ struct FollowUpView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(Theme.card)
-                .foregroundStyle(.secondary)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .nocturneSecondaryButton(cornerRadius: 16)
 
                 Button("Save") {
                     save()
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(Theme.blue)
-                .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .nocturnePrimaryButton(isEnabled: !isSaving, cornerRadius: 16)
                 .disabled(isSaving)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 40)
         }
-        .background(Theme.background.ignoresSafeArea())
+        }
         .onTapGesture { noteFocused = false }
         .onAppear {
             if let tag = preselectedTag { selectedTags.insert(tag) }
@@ -256,12 +251,15 @@ struct ChipButton: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(isSelected ? Theme.blue.opacity(0.15) : Theme.card)
-            .foregroundStyle(isSelected ? Theme.blue : .primary)
+            .background {
+                Capsule()
+                    .fill(isSelected ? AnyShapeStyle(Theme.brandGradientSoft) : AnyShapeStyle(Theme.glassSurface))
+            }
+            .foregroundStyle(isSelected ? Theme.brandCoral : .primary)
             .clipShape(Capsule())
             .overlay(
                 Capsule()
-                    .stroke(isSelected ? Theme.blue.opacity(0.4) : Color.clear, lineWidth: 1.5)
+                    .stroke(isSelected ? Theme.brandCoral.opacity(0.45) : Theme.hairline, lineWidth: 1.2)
             )
         }
         .buttonStyle(.plain)
@@ -369,7 +367,7 @@ struct AddActivitySheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") { commitAdd() }
                         .fontWeight(.semibold)
-                        .foregroundStyle(canAdd ? Theme.blue : .secondary)
+                        .foregroundStyle(canAdd ? Theme.brandCoral : .secondary)
                         .disabled(!canAdd)
                 }
             }

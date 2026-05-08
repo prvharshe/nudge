@@ -12,6 +12,9 @@ struct CheckInView: View {
 
     var body: some View {
         GeometryReader { geo in
+            ZStack {
+                AmbientBackground()
+
             VStack(spacing: 0) {
                 // ── Question (top ~52% — sky portion) ─────────────────────────
                 VStack(spacing: 16) {
@@ -115,12 +118,17 @@ struct CheckInView: View {
                         .padding(.vertical, 17)
                         .background(.ultraThinMaterial,
                                     in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .strokeBorder(Theme.hairline, lineWidth: 1)
+                        }
                         .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 52)
+            }
             }
         }
         .task { await runDetection() }
@@ -168,7 +176,7 @@ struct CheckInView: View {
                     in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Theme.green.opacity(0.3), lineWidth: 1)
+                .stroke(Theme.hairline, lineWidth: 1)
         )
     }
 

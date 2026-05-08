@@ -13,9 +13,13 @@ struct ReactionOverlayView: View {
     var body: some View {
         ZStack {
             // Dark scrim
-            Color.black.opacity(0.88)
+            Theme.ink.opacity(0.94)
                 .ignoresSafeArea()
                 .onTapGesture { dismiss() }
+
+            AmbientBackground()
+                .opacity(0.42)
+                .allowsHitTesting(false)
 
             VStack(spacing: 20) {
                 Text(emoji)
@@ -23,12 +27,12 @@ struct ReactionOverlayView: View {
 
                 Text("Logged!")
                     .font(.title.bold())
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.brandCream)
 
                 if let text = reactionText {
                     Text(text)
                         .font(.body)
-                        .foregroundStyle(.white.opacity(0.82))
+                        .foregroundStyle(Theme.brandCream.opacity(0.82))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 36)
                         .opacity(textVisible ? 1 : 0)
@@ -40,13 +44,13 @@ struct ReactionOverlayView: View {
                         }
                 } else {
                     ProgressView()
-                        .tint(.white.opacity(0.5))
+                        .tint(Theme.brandCream.opacity(0.5))
                         .scaleEffect(0.8)
                 }
 
                 Text("Tap to continue")
                     .font(.caption)
-                    .foregroundStyle(.white.opacity(0.3))
+                    .foregroundStyle(Theme.brandCream.opacity(0.36))
                     .padding(.top, 8)
             }
         }

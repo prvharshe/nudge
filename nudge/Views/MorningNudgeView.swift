@@ -12,6 +12,9 @@ struct MorningNudgeView: View {
     private let cachedDateKey = "nudge.morningNudgeDate"
 
     var body: some View {
+        ZStack {
+            AmbientBackground()
+
         VStack(spacing: 0) {
             Spacer()
 
@@ -70,6 +73,7 @@ struct MorningNudgeView: View {
             }
             .disabled(isLoading || isRefreshing)
             .padding(.bottom, 32)
+        }
         }
         .animation(.easeInOut(duration: 0.4), value: message)
         .animation(.easeInOut(duration: 0.2), value: isLoading)
