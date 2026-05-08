@@ -97,8 +97,9 @@ struct CoachView: View {
             VStack(spacing: 28) {
                 // Icon + title
                 VStack(spacing: 14) {
-                    Text("🔒")
+                    Image(systemName: "lock.circle.fill")
                         .font(.system(size: 52))
+                        .foregroundStyle(Theme.brandGradient)
 
                     VStack(spacing: 8) {
                         Text("Still learning your rhythm")
@@ -128,7 +129,7 @@ struct CoachView: View {
                                         Circle().stroke(
                                             i < allEntries.count
                                                 ? Theme.green.opacity(0.4)
-                                                : Theme.purple.opacity(0.2),
+                                                : Theme.brandCoral.opacity(0.25),
                                             lineWidth: 1
                                         )
                                     )
@@ -177,8 +178,9 @@ struct CoachView: View {
                 Spacer(minLength: 40)
 
                 VStack(spacing: 12) {
-                    Text("🧠")
+                    Image(systemName: "brain.head.profile")
                         .font(.system(size: 52))
+                        .foregroundStyle(Theme.brandGradient)
 
                     Text("Ask your coach")
                         .font(.title2.bold())
@@ -209,6 +211,10 @@ struct CoachView: View {
                             .padding(.vertical, 12)
                             .background(Theme.card)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .strokeBorder(Theme.brandBorderGradient, lineWidth: 1)
+                            }
                         }
                         .buttonStyle(.plain)
                     }

@@ -20,6 +20,9 @@ nudge-backend/.env
 # ── Claude / AI tooling ───────────────────────────────────────
 .claude/
 
+# ── Local cloud tooling ────────────────────────────────────────
+.gcloud/
+
 # ── macOS ─────────────────────────────────────────────────────
 .DS_Store
 **/.DS_Store

@@ -19,7 +19,7 @@ struct MorningNudgeView: View {
                 VStack(spacing: 6) {
                     Image(systemName: "sun.horizon.fill")
                         .font(.system(size: 48))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Theme.brandGradient)
                         .symbolEffect(.pulse, isActive: isLoading || isRefreshing)
 
                     Text("Good morning\(userName.isEmpty ? "" : ", \(userName)") ✨")
@@ -66,7 +66,7 @@ struct MorningNudgeView: View {
                     Text(isRefreshing ? "Refreshing…" : "Refresh nudge")
                         .font(.caption)
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.brandCoral)
             }
             .disabled(isLoading || isRefreshing)
             .padding(.bottom, 32)

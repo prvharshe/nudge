@@ -28,6 +28,65 @@ enum Theme {
     static let muted = Color(uiColor: UIColor { t in
         t.userInterfaceStyle == .dark ? UIColor(hex: "4B5563") : UIColor(hex: "9CA3AF")
     })
+
+    static let brandNavy = Color(hex: "182A4A")
+    static let brandCoral = Color(hex: "E78A78")
+    static let brandAmber = Color(hex: "FF9637")
+    static let brandCream = Color(hex: "FFF4E3")
+
+    static let brandGradient = LinearGradient(
+        colors: [brandNavy, brandCoral, brandAmber],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    static let brandGradientSoft = LinearGradient(
+        colors: [
+            brandNavy.opacity(0.12),
+            brandCoral.opacity(0.10),
+            brandAmber.opacity(0.14)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    static let brandBorderGradient = LinearGradient(
+        colors: [
+            brandCream.opacity(0.7),
+            brandCoral.opacity(0.55),
+            brandAmber.opacity(0.65)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+}
+
+// MARK: - Brand surfaces
+
+extension View {
+    func brandPrimaryButton(isEnabled: Bool = true, cornerRadius: CGFloat = 20) -> some View {
+        self
+            .background {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(isEnabled ? AnyShapeStyle(Theme.brandGradient) : AnyShapeStyle(Theme.blue.opacity(0.3)))
+            }
+            .foregroundStyle(.white)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    func brandSelectedSurface(isSelected: Bool, cornerRadius: CGFloat = 12) -> some View {
+        self
+            .background {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(isSelected ? AnyShapeStyle(Theme.brandGradientSoft) : AnyShapeStyle(Theme.card))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(isSelected ? AnyShapeStyle(Theme.brandBorderGradient) : AnyShapeStyle(Color.clear),
+                                  lineWidth: isSelected ? 1.5 : 0)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
 }
 
 // MARK: - UIColor hex (used by adaptive Theme colors above)

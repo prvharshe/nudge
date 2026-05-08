@@ -2,7 +2,7 @@ import Foundation
 
 enum BackendService {
     private static var baseURL: String {
-        UserDefaults.standard.string(forKey: "nudge.backendURL") ?? "https://nudge-production-7890.up.railway.app"
+        UserDefaults.standard.string(forKey: "nudge.backendURL") ?? "https://nudge-backend-40994690021.asia-south1.run.app"
     }
 
     // MARK: - Sync entry to Supermemory via backend

@@ -25,6 +25,10 @@ struct CheckInView: View {
                             .padding(.horizontal, 14)
                             .padding(.vertical, 7)
                             .background(.ultraThinMaterial, in: Capsule())
+                            .overlay {
+                                Capsule()
+                                    .strokeBorder(Theme.brandBorderGradient, lineWidth: 1)
+                            }
 
                         if let steps = liveSteps, steps > 0 {
                             Text("\(steps.formatted()) steps")
@@ -33,6 +37,10 @@ struct CheckInView: View {
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 7)
                                 .background(.ultraThinMaterial, in: Capsule())
+                                .overlay {
+                                    Capsule()
+                                        .strokeBorder(Theme.brandBorderGradient, lineWidth: 1)
+                                }
                                 .transition(.opacity.combined(with: .scale))
                         }
                     }
@@ -89,8 +97,7 @@ struct CheckInView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                .stroke(Theme.green.opacity(colorScheme == .dark ? 0.40 : 0.25),
-                                        lineWidth: 1.5)
+                                .stroke(Theme.brandBorderGradient, lineWidth: 1.5)
                         )
                     }
                     .buttonStyle(.plain)

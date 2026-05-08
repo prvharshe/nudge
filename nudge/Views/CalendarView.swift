@@ -125,9 +125,13 @@ struct CalendarView: View {
     private var weeklyInsightCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("This week", systemImage: "sparkles")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(Theme.brandGradient)
+                    Text("Recent patterns")
+                        .foregroundStyle(.primary)
+                }
+                .font(.subheadline.weight(.semibold))
                 Spacer()
                 Button {
                     generateInsight()
@@ -160,7 +164,7 @@ struct CalendarView: View {
                         withAnimation { insightExpanded.toggle() }
                     }
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(Theme.blue)
+                    .foregroundStyle(Theme.brandCoral)
                 }
             } else {
                 Text("Tap ↻ to generate your weekly pattern analysis.")
@@ -171,27 +175,45 @@ struct CalendarView: View {
         .padding(16)
         .background(Theme.card)
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Theme.brandBorderGradient, lineWidth: 1)
+        }
     }
 
     // MARK: - 7-day step chart
 
     private var weeklyStepsChart: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let last7Dates = lastSevenDates()
+        let movedDates = Set(entries.filter { $0.didMove }
+            .map { calendar.startOfDay(for: $0.date) })
+        let loggedMovedInLast7 = last7Dates.filter { movedDates.contains($0) }.count
+
+        return VStack(alignment: .leading, spacing: 8) {
             Text("Steps · last 7 days")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            let movedDates = Set(entries.filter { $0.didMove }
-                .map { calendar.startOfDay(for: $0.date) })
+            Text("Logged movement: \(loggedMovedInLast7)/7 days")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
             Chart(weeklySteps, id: \.date) { item in
                 BarMark(
                     x: .value("Day", item.date, unit: .day),
                     y: .value("Steps", item.steps)
                 )
-                .foregroundStyle(
-                    movedDates.contains(calendar.startOfDay(for: item.date)) ? Theme.green : Theme.muted
-                )
+                .foregroundStyle(Theme.muted)
                 .cornerRadius(4)
+
+                if movedDates.contains(calendar.startOfDay(for: item.date)) {
+                    PointMark(
+                        x: .value("Logged", item.date, unit: .day),
+                        y: .value("Steps", item.steps)
+                    )
+                    .symbolSize(36)
+                    .foregroundStyle(Theme.green)
+                }
             }
             .chartXAxis {
                 AxisMarks(values: .stride(by: .day)) { value in
@@ -205,6 +227,11 @@ struct CalendarView: View {
             }
             .chartYAxis(.hidden)
             .frame(height: 80)
+
+            HStack(spacing: 12) {
+                legendChip(color: Theme.muted, text: "Daily steps (HealthKit)")
+                legendChip(color: Theme.green, text: "You logged movement")
+            }
         }
         .padding(16)
         .background(Theme.card)
@@ -370,6 +397,25 @@ struct CalendarView: View {
     private func entry(for date: Date) -> Entry? {
         let start = calendar.startOfDay(for: date)
         return entries.first { calendar.startOfDay(for: $0.date) == start }
+    }
+
+    private func lastSevenDates() -> [Date] {
+        let today = calendar.startOfDay(for: Date.now)
+        return (-6...0).compactMap { offset in
+            calendar.date(byAdding: .day, value: offset, to: today)
+        }
+    }
+
+    @ViewBuilder
+    private func legendChip(color: Color, text: String) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(color)
+                .frame(width: 7, height: 7)
+            Text(text)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
