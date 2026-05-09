@@ -287,6 +287,9 @@ struct SettingsView: View {
                 }
                 #endif
             }
+            .scrollContentBackground(.hidden)
+            .background(AmbientBackground())
+            .tint(Theme.brandCoral)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -391,13 +394,8 @@ struct EditProfileView: View {
                                 .font(.subheadline.weight(.medium))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
-                                .background(selectedSex == s ? Theme.blue.opacity(0.1) : Theme.card)
-                                .foregroundStyle(selectedSex == s ? Theme.blue : .primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .strokeBorder(selectedSex == s ? Theme.blue : Color.clear, lineWidth: 1.5)
-                                )
+                                .brandSelectedSurface(isSelected: selectedSex == s, cornerRadius: 10)
+                                .foregroundStyle(selectedSex == s ? Theme.brandCoral : .primary)
                         }
                         .buttonStyle(.plain)
                     }
@@ -457,7 +455,7 @@ struct EditProfileView: View {
                             }
                             Spacer()
                             if selectedActivity == level {
-                                Image(systemName: "checkmark").foregroundStyle(Theme.blue)
+                                Image(systemName: "checkmark").foregroundStyle(Theme.brandCoral)
                             }
                         }
                         .contentShape(Rectangle())
@@ -496,6 +494,9 @@ struct EditProfileView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(AmbientBackground())
+        .tint(Theme.brandCoral)
         .onDisappear {
             Task { await UserProfile.syncToSupermemoryIfChanged() }
         }
@@ -523,7 +524,7 @@ struct GoalPickerView: View {
                         }
                         Spacer()
                         if selectedGoal == goal {
-                            Image(systemName: "checkmark").foregroundStyle(Theme.blue)
+                            Image(systemName: "checkmark").foregroundStyle(Theme.brandCoral)
                         }
                     }
                     .contentShape(Rectangle())
@@ -531,6 +532,9 @@ struct GoalPickerView: View {
                 .buttonStyle(.plain)
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(AmbientBackground())
+        .tint(Theme.brandCoral)
         .navigationTitle("Change goal")
         .navigationBarTitleDisplayMode(.inline)
     }

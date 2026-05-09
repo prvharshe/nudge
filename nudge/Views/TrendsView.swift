@@ -39,6 +39,7 @@ struct TrendsView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 40)
                 }
+                .background(AmbientBackground())
                 .navigationTitle("Trends")
                 .navigationBarTitleDisplayMode(.large)
                 .task { await loadData() }
@@ -58,8 +59,9 @@ struct TrendsView: View {
 
             VStack(spacing: 28) {
                 VStack(spacing: 14) {
-                    Text("📈")
+                    Image(systemName: "chart.line.uptrend.xyaxis.circle.fill")
                         .font(.system(size: 52))
+                        .foregroundStyle(Theme.brandGradient)
 
                     VStack(spacing: 8) {
                         Text("Patterns need time")
@@ -87,7 +89,7 @@ struct TrendsView: View {
                                         Circle().stroke(
                                             i < allEntries.count
                                                 ? Theme.green.opacity(0.4)
-                                                : Theme.blue.opacity(0.2),
+                                                : Theme.brandCoral.opacity(0.25),
                                             lineWidth: 1
                                         )
                                     )
@@ -114,6 +116,7 @@ struct TrendsView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AmbientBackground())
     }
 
     // MARK: - Data loading
@@ -238,7 +241,7 @@ struct TrendsView: View {
                             .stroke(Color.secondary.opacity(0.15), lineWidth: 7)
                         Circle()
                             .trim(from: 0, to: pct)
-                            .stroke(Theme.green, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                            .stroke(Theme.brandGradient, style: StrokeStyle(lineWidth: 7, lineCap: .round))
                             .rotationEffect(.degrees(-90))
                         Text("\(Int(pct * 100))%")
                             .font(.caption2.weight(.bold))
@@ -519,7 +522,7 @@ private struct TrendCard<Content: View>: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .surfaceCard()
     }
 }
 

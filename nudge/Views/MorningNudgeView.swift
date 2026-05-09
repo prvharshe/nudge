@@ -12,6 +12,9 @@ struct MorningNudgeView: View {
     private let cachedDateKey = "nudge.morningNudgeDate"
 
     var body: some View {
+        ZStack {
+            AmbientBackground()
+
         VStack(spacing: 0) {
             Spacer()
 
@@ -19,7 +22,7 @@ struct MorningNudgeView: View {
                 VStack(spacing: 6) {
                     Image(systemName: "sun.horizon.fill")
                         .font(.system(size: 48))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Theme.brandGradient)
                         .symbolEffect(.pulse, isActive: isLoading || isRefreshing)
 
                     Text("Good morning\(userName.isEmpty ? "" : ", \(userName)") ✨")
@@ -66,10 +69,11 @@ struct MorningNudgeView: View {
                     Text(isRefreshing ? "Refreshing…" : "Refresh nudge")
                         .font(.caption)
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.brandCoral)
             }
             .disabled(isLoading || isRefreshing)
             .padding(.bottom, 32)
+        }
         }
         .animation(.easeInOut(duration: 0.4), value: message)
         .animation(.easeInOut(duration: 0.2), value: isLoading)

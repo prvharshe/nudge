@@ -68,6 +68,7 @@ struct CoachView: View {
                     Divider()
                     inputBar
                 }
+                .background(AmbientBackground())
                 .navigationTitle("Coach")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -97,8 +98,9 @@ struct CoachView: View {
             VStack(spacing: 28) {
                 // Icon + title
                 VStack(spacing: 14) {
-                    Text("🔒")
+                    Image(systemName: "lock.circle.fill")
                         .font(.system(size: 52))
+                        .foregroundStyle(Theme.brandGradient)
 
                     VStack(spacing: 8) {
                         Text("Still learning your rhythm")
@@ -128,7 +130,7 @@ struct CoachView: View {
                                         Circle().stroke(
                                             i < allEntries.count
                                                 ? Theme.green.opacity(0.4)
-                                                : Theme.purple.opacity(0.2),
+                                                : Theme.brandCoral.opacity(0.25),
                                             lineWidth: 1
                                         )
                                     )
@@ -167,6 +169,7 @@ struct CoachView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AmbientBackground())
     }
 
     // MARK: - Empty state
@@ -177,8 +180,9 @@ struct CoachView: View {
                 Spacer(minLength: 40)
 
                 VStack(spacing: 12) {
-                    Text("🧠")
+                    Image(systemName: "brain.head.profile")
                         .font(.system(size: 52))
+                        .foregroundStyle(Theme.brandGradient)
 
                     Text("Ask your coach")
                         .font(.title2.bold())
@@ -207,8 +211,11 @@ struct CoachView: View {
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
-                            .background(Theme.card)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .surfaceCard(cornerRadius: 12)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .strokeBorder(Theme.brandBorderGradient, lineWidth: 1)
+                            }
                         }
                         .buttonStyle(.plain)
                     }
@@ -268,8 +275,7 @@ struct CoachView: View {
                 .lineLimit(1...4)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(Theme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .surfaceCard(cornerRadius: 20)
                 .onSubmit { sendMessage() }
 
             Button {
@@ -277,13 +283,14 @@ struct CoachView: View {
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 32))
-                    .foregroundStyle(canSend ? Theme.blue : Theme.muted)
+                    .foregroundStyle(canSend ? Theme.brandCoral : Theme.muted)
             }
             .disabled(!canSend)
             .animation(.easeInOut(duration: 0.15), value: canSend)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .background(.ultraThinMaterial)
     }
 
     private var canSend: Bool {
@@ -382,16 +389,12 @@ struct MessageRow: View {
                     .font(.subheadline.weight(.medium))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Theme.blue)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .nocturnePrimaryButton(cornerRadius: 18)
             }
 
             // Answer (coach, leading)
             HStack(alignment: .top, spacing: 10) {
-                Text("🧠")
-                    .font(.system(size: 22))
-                    .padding(.top, 2)
+                GradientIconBadge(systemName: "brain.head.profile", size: 28)
 
                 Text(message.answer)
                     .font(.subheadline)
@@ -399,8 +402,7 @@ struct MessageRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    .background(Theme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .surfaceCard(cornerRadius: 18)
 
                 Spacer(minLength: 0)
             }
@@ -416,9 +418,7 @@ struct TypingIndicatorView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Text("🧠")
-                .font(.system(size: 22))
-                .padding(.top, 2)
+            GradientIconBadge(systemName: "brain.head.profile", size: 28)
 
             HStack(spacing: 5) {
                 ForEach(0..<3, id: \.self) { i in
@@ -430,8 +430,7 @@ struct TypingIndicatorView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
-            .background(Theme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .surfaceCard(cornerRadius: 18)
 
             Spacer()
         }

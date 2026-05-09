@@ -27,9 +27,7 @@ struct ContentView: View {
                 todayTab
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background {
-                        // SceneKit handles day/night transition via SCNTransaction
-                        TrackSceneView(isDark: sceneManager.isDark)
-                            .ignoresSafeArea()
+                        AmbientBackground()
                     }
                     .navigationTitle("Today")
                     .navigationBarTitleDisplayMode(.inline)
@@ -43,10 +41,11 @@ struct ContentView: View {
                             } label: {
                                 Image(systemName: sceneManager.isDark ? "sun.max.fill" : "moon.stars.fill")
                                     .symbolRenderingMode(.hierarchical)
-                                    .foregroundStyle(Theme.blue)
+                                    .foregroundStyle(sceneManager.isDark ? Theme.brandAmber : Theme.brandNavy)
                                     .font(.system(size: 17, weight: .medium))
                                     .padding(6)
                                     .background(.ultraThinMaterial, in: Circle())
+                                    .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
                             }
                         }
                         ToolbarItem(placement: .topBarTrailing) {
@@ -57,6 +56,7 @@ struct ContentView: View {
                                     .foregroundStyle(.secondary)
                                     .padding(6)
                                     .background(.ultraThinMaterial, in: Circle())
+                                    .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
                             }
                         }
                     }
@@ -279,11 +279,7 @@ struct TodayDoneView: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 16)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color.primary.opacity(0.07), lineWidth: 1)
-            )
+            .surfaceCard()
         }
     }
 
@@ -331,11 +327,7 @@ struct TodayDoneView: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(score.color.opacity(0.2), lineWidth: 1)
-        )
+        .surfaceCard()
     }
 
     @ViewBuilder
@@ -354,11 +346,7 @@ struct TodayDoneView: View {
             .padding(.horizontal, 18)
             .padding(.vertical, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color.yellow.opacity(0.25), lineWidth: 1)
-            )
+            .surfaceCard()
         }
     }
 
@@ -393,13 +381,14 @@ struct TodayDoneView: View {
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
                             .fill(.ultraThinMaterial)
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .fill(accent.opacity(colorScheme == .dark ? 0.18 : 0.12))
+                            .fill(accent.opacity(colorScheme == .dark ? 0.16 : 0.10))
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .stroke(accent.opacity(colorScheme == .dark ? 0.35 : 0.20), lineWidth: 1)
+                            .stroke(Theme.hairline, lineWidth: 1)
                     )
+                    .shadow(color: accent.opacity(colorScheme == .dark ? 0.18 : 0.08), radius: 22, y: 12)
 
                     // ── Recovery score card ───────────────────────────────────────
                     if let score = recoveryScore {
@@ -467,9 +456,7 @@ struct TodayDoneView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 17)
-                .background(Theme.blue)
-                .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .nocturnePrimaryButton(cornerRadius: 16)
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 24)

@@ -19,6 +19,8 @@ struct OnboardingView: View {
 
     var body: some View {
         ZStack {
+            AmbientBackground()
+
             switch step {
             case .splash:
                 splashScreen
@@ -64,8 +66,12 @@ struct OnboardingView: View {
             VStack(spacing: 32) {
                 // Logo + title
                 VStack(spacing: 16) {
-                    Text("🏃")
-                        .font(.system(size: 72))
+                    Image("NudgeLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 112, height: 112)
+                        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                        .shadow(color: Theme.brandAmber.opacity(0.22), radius: 18, y: 10)
 
                     VStack(spacing: 8) {
                         Text("Nudge")
@@ -98,9 +104,7 @@ struct OnboardingView: View {
                     .font(.system(.body, design: .rounded).weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 18)
-                    .background(Theme.blue)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .nocturnePrimaryButton()
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 48)
@@ -136,8 +140,7 @@ struct OnboardingView: View {
                     .multilineTextAlignment(.center)
                     .padding(.vertical, 16)
                     .padding(.horizontal, 20)
-                    .background(Theme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .surfaceCard(cornerRadius: 16)
                     .onSubmit { advanceFromName() }
             }
             .padding(.horizontal, 32)
@@ -152,11 +155,7 @@ struct OnboardingView: View {
                     .font(.system(.body, design: .rounded).weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 18)
-                    .background(nameInput.trimmingCharacters(in: .whitespaces).isEmpty
-                                ? Theme.blue.opacity(0.3)
-                                : Theme.blue)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .nocturnePrimaryButton(isEnabled: !nameInput.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .disabled(nameInput.trimmingCharacters(in: .whitespaces).isEmpty)
             .padding(.horizontal, 24)
@@ -214,12 +213,7 @@ struct OnboardingView: View {
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
-                            .background(selectedGoal == goal ? Theme.blue.opacity(0.08) : Theme.card)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .strokeBorder(selectedGoal == goal ? Theme.blue : Color.clear, lineWidth: 2)
-                            )
+                            .brandSelectedSurface(isSelected: selectedGoal == goal, cornerRadius: 14)
                         }
                         .buttonStyle(.plain)
                     }
@@ -239,9 +233,7 @@ struct OnboardingView: View {
                     .font(.system(.body, design: .rounded).weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 18)
-                    .background(selectedGoal == nil ? Theme.blue.opacity(0.3) : Theme.blue)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .nocturnePrimaryButton(isEnabled: selectedGoal != nil)
             }
             .disabled(selectedGoal == nil)
             .padding(.horizontal, 24)
@@ -284,16 +276,8 @@ struct OnboardingView: View {
                                         .font(.system(.subheadline, design: .rounded).weight(.medium))
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 12)
-                                        .background(selectedSex == s
-                                                    ? Theme.blue.opacity(0.1) : Theme.card)
-                                        .foregroundStyle(selectedSex == s ? Theme.blue : .primary)
-                                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .strokeBorder(selectedSex == s
-                                                              ? Theme.blue : Color.clear,
-                                                              lineWidth: 2)
-                                        )
+                                        .foregroundStyle(selectedSex == s ? Theme.brandCoral : .primary)
+                                        .brandSelectedSurface(isSelected: selectedSex == s)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -332,20 +316,12 @@ struct OnboardingView: View {
                                         Spacer()
                                         if selectedActivity == level {
                                             Image(systemName: "checkmark.circle.fill")
-                                                .foregroundStyle(Theme.blue)
+                                                .foregroundStyle(Theme.brandCoral)
                                         }
                                     }
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 10)
-                                    .background(selectedActivity == level
-                                                ? Theme.blue.opacity(0.08) : Theme.card)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .strokeBorder(selectedActivity == level
-                                                          ? Theme.blue : Color.clear,
-                                                          lineWidth: 1.5)
-                                    )
+                                    .brandSelectedSurface(isSelected: selectedActivity == level)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -366,9 +342,7 @@ struct OnboardingView: View {
                             .font(.system(.body, design: .rounded).weight(.semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 18)
-                            .background(Theme.blue)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                            .nocturnePrimaryButton()
                     }
 
                     Button {
@@ -431,8 +405,7 @@ struct OnboardingView: View {
                     NotificationPreviewRow(time: "10:00 AM", text: "Your morning nudge is ready ✨")
                 }
                 .padding(16)
-                .background(Theme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .surfaceCard(cornerRadius: 16)
             }
             .padding(.horizontal, 32)
 
@@ -451,9 +424,7 @@ struct OnboardingView: View {
                         .font(.system(.body, design: .rounded).weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 18)
-                        .background(Theme.blue)
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                        .nocturnePrimaryButton()
                 }
 
                 Button {
@@ -549,8 +520,7 @@ private struct ProfileField: View {
             }
             .padding(.vertical, 12)
             .padding(.horizontal, 8)
-            .background(Theme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .surfaceCard(cornerRadius: 12)
         }
         .frame(maxWidth: .infinity)
     }
