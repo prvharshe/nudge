@@ -118,3 +118,73 @@ export async function deleteAllEntries(userId) {
 
   return { deleted, failed };
 }
+
+/**
+ * Lightweight check if user has any entry memories in Supermemory.
+ * Returns { hasEntries: boolean, count: number, latestDate: string|null }
+ */
+export async function checkUserHasEntries(userId) {
+  const filter = { AND: [
+    { filterType: 'array_contains', key: 'tags', value: userId },
+    { filterType: 'array_contains', key: 'tags', value: 'entry' }
+  ]};
+  const res = await fetch(`${BASE}/search`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ q: 'movement', filters: filter, limit: 1 }),
+  });
+  if (!res.ok) return { hasEntries: false, count: 0, latestDate: null };
+  const data = await res.json();
+  const results = data.results ?? [];
+  return {
+    hasEntries: results.length > 0,
+    count: results.length,
+    latestDate: results[0]?.metadata?.nudgeEntry?.date ?? null
+  };
+}
+
+async function searchRawMemories(filters, query, limit = 500) {
+  const res = await fetch(`${BASE}/search`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ q: query, filters: { AND: filters }, limit }),
+  });
+  if (!res.ok) return [];
+  return (await res.json()).results ?? [];
+}
+
+function legacyDateKey(value) {
+  const match = value.match(/^(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{1,2}) (\d{4})$/);
+  if (!match) return null;
+  const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(match[1]) + 1;
+  return `${match[3]}-${String(month).padStart(2, '0')}-${match[2].padStart(2, '0')}`;
+}
+
+export async function restoreEntries(userId) {
+  const records = await searchRawMemories([
+    { filterType: 'array_contains', key: 'tags', value: userId },
+    { filterType: 'array_contains', key: 'tags', value: 'entry' },
+  ], 'movement check-in activity note steps workout', 500);
+
+  const seen = new Set();
+  return records.map(record => {
+    const content = record.chunks?.[0]?.content ?? record.content ?? '';
+    const snapshot = record.metadata?.nudgeEntry;
+    if (snapshot?.date && typeof snapshot.didMove === 'boolean') return snapshot;
+
+    const match = content.match(/^On (.+?), the user (did move|did not move)\.\s*(?:Activities: (.*?)\.\s*)?(?:Note: "(.*?)"\.)?/);
+    if (!match) return null;
+    const date = legacyDateKey(match[1]);
+    if (!date) return null;
+    return {
+      date,
+      didMove: match[2] === 'did move',
+      activities: match[3] ? match[3].split(', ').filter(Boolean) : [],
+      note: match[4] || null,
+    };
+  }).filter(entry => {
+    if (!entry || seen.has(entry.date)) return false;
+    seen.add(entry.date);
+    return true;
+  }).sort((a, b) => a.date.localeCompare(b.date));
+}

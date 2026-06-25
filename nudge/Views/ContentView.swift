@@ -13,6 +13,9 @@ struct ContentView: View {
     @State private var selectedTab = 0
     @State private var showMorningNudge = false
     @State private var showSettings = false
+    @State private var showRestorePrompt = false
+    @State private var restoreEntryCount = 0
+    @State private var restoreLatestDate = ""
 
     // Check-in flow state
     @State private var checkInStep: CheckInStep = .prompt
@@ -84,6 +87,16 @@ struct ContentView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
+        .sheet(isPresented: $showRestorePrompt) {
+            RestorePromptView(
+                entryCount: restoreEntryCount,
+                latestDate: restoreLatestDate,
+                onRestore: { restoreHistory() },
+                onSkip: { markRestored() }
+            )
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
         .fullScreenCover(isPresented: .constant(!onboardingComplete)) {
             OnboardingView()
         }
@@ -102,6 +115,8 @@ struct ContentView: View {
             await HealthKitService.shared.requestAuthorization()
             // Sync profile to Supermemory if it has changed since last sync
             Task { await UserProfile.syncToSupermemoryIfChanged() }
+            // Check for recoverable history on first launch
+            await checkForRecoverableHistory()
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
@@ -142,6 +157,64 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Recovery check
+
+    private func checkForRecoverableHistory() async {
+        let hasLocalEntries = !entries.isEmpty
+        let hasRestoredBefore = UserDefaults.standard.bool(forKey: "nudge.hasRestoredHistory")
+
+        // Only check if no local data and never restored before
+        guard !hasLocalEntries && !hasRestoredBefore else { return }
+
+        if let result = await BackendService.checkUserHasEntries(), result.hasEntries {
+            await MainActor.run {
+                restoreEntryCount = result.count
+                restoreLatestDate = result.latestDate ?? ""
+                showRestorePrompt = true
+            }
+        }
+    }
+
+    private func restoreHistory() {
+        Task {
+            do {
+                let restored = try await BackendService.restoreEntries()
+                let existingDays = Set(entries.map { Calendar.current.startOfDay(for: $0.date) })
+                var imported = 0
+                for item in restored {
+                    guard let date = Self.restoreDateFormatter.date(from: item.date) else { continue }
+                    let day = Calendar.current.startOfDay(for: date)
+                    guard !existingDays.contains(day) else { continue }
+                    let entry = Entry(date: day, didMove: item.didMove, activities: item.activities, note: item.note)
+                    entry.synced = true
+                    modelContext.insert(entry)
+                    imported += 1
+                }
+                try modelContext.save()
+                await MainActor.run {
+                    markRestored()
+                    showRestorePrompt = false
+                }
+            } catch {
+                await MainActor.run {
+                    markRestored()
+                    showRestorePrompt = false
+                }
+            }
+        }
+    }
+
+    private func markRestored() {
+        UserDefaults.standard.set(true, forKey: "nudge.hasRestoredHistory")
+    }
+
+    private static let restoreDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        return f
+    }()
+
     // MARK: - Today Tab
 
     @ViewBuilder
@@ -160,6 +233,73 @@ struct ContentView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Restore Prompt View
+
+struct RestorePromptView: View {
+    let entryCount: Int
+    let latestDate: String
+    let onRestore: () -> Void
+    let onSkip: () -> Void
+
+    private var formattedDate: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        if let date = formatter.date(from: latestDate) {
+            formatter.dateStyle = .medium
+            formatter.timeZone = .current
+            return formatter.string(from: date)
+        }
+        return latestDate
+    }
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "icloud.and.arrow.down")
+                .font(.system(size: 56))
+                .foregroundStyle(Theme.brandAmber)
+
+            VStack(spacing: 8) {
+                Text("Found your history")
+                    .font(.system(.title, design: .rounded).weight(.bold))
+                    .multilineTextAlignment(.center)
+
+                Text("We found \(entryCount) check-in\(entryCount == 1 ? "" : "s") from your previous install, most recent on \(formattedDate).")
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+
+            VStack(spacing: 12) {
+                Button {
+                    Haptics.impact(.medium)
+                    onRestore()
+                } label: {
+                    Text("Restore History")
+                        .font(.system(.body, design: .rounded).weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .nocturnePrimaryButton()
+                }
+
+                Button {
+                    Haptics.impact(.light)
+                    onSkip()
+                } label: {
+                    Text("Start Fresh")
+                        .font(.system(.body, design: .rounded).weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 8)
+        }
+        .padding(.vertical, 32)
+        .interactiveDismissDisabled()
     }
 }
 

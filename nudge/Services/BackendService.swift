@@ -406,6 +406,37 @@ enum BackendService {
         let json = try JSONDecoder().decode(DeleteResponse.self, from: data)
         return (json.deleted, json.failed)
     }
+
+    // MARK: - Restore entries from backend
+    static func restoreEntries() async throws -> [RestoredEntry] {
+        guard let url = URL(string: "\(baseURL)/api/entries?userId=\(UserService.userId)") else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 30
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode(EntryRestoreResponse.self, from: data).entries
+    }
+
+    // MARK: - Check if user has entries in Supermemory (for recovery prompt)
+    static func checkUserHasEntries() async -> EntryExistenceResult? {
+        let userId = UserService.userId
+        guard let url = URL(string: "\(baseURL)/api/entries/exists?userId=\(userId)") else { return nil }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
+            return try JSONDecoder().decode(EntryExistenceResult.self, from: data)
+        } catch {
+            return nil
+        }
+    }
 }
 
 private struct NudgeResponse: Decodable {
@@ -438,4 +469,21 @@ private struct ReportUploadResponse: Decodable {
     let insights: [String]
     let biomarkers: [String: BackendService.BiomarkerEntry]?
     let reportDate: String
+}
+
+struct EntryExistenceResult: Decodable {
+    let hasEntries: Bool
+    let count: Int
+    let latestDate: String?
+}
+
+struct RestoredEntry: Decodable {
+    let date: String
+    let didMove: Bool
+    let activities: [String]
+    let note: String?
+}
+
+private struct EntryRestoreResponse: Decodable {
+    let entries: [RestoredEntry]
 }
