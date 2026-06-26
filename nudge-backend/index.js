@@ -9,6 +9,7 @@ import weeklyRouter from './routes/weekly.js';
 import memoriesRouter from './routes/memories.js';
 import learnRouter from './routes/learn.js';
 import reportsRouter from './routes/reports.js';
+import recoveryRouter from './routes/recovery.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3000;
@@ -26,6 +27,7 @@ app.use('/api/weekly', weeklyRouter);
 app.use('/api/memories', memoriesRouter);
 app.use('/api/learn', learnRouter);
 app.use('/api/reports', reportsRouter);
+app.use('/api/recovery', recoveryRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {

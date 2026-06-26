@@ -442,6 +442,8 @@ struct OnboardingView: View {
 
     private func finishOnboarding() {
         onboardingComplete = true
+        // Register recovery code in the background — fire-and-forget
+        Task { await BackendService.registerRecoveryCode() }
     }
 }
 

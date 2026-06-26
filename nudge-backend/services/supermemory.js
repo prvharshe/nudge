@@ -11,13 +11,13 @@ function headers() {
  * Store any memory in Supermemory with a type tag.
  * type: 'entry' | 'profile' | 'insight' | 'milestone' | 'convo' | 'context'
  */
-export async function addMemory(content, userId, type = 'entry') {
+export async function addMemory(content, userId, type = 'entry', extraTags = [], extraMetadata = {}) {
   const res = await fetch(`${BASE}/documents`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({
       content,
-      metadata: { tags: ['nudge', userId, type] },
+      metadata: { tags: ['nudge', userId, type, ...extraTags], ...extraMetadata },
     }),
   });
   if (!res.ok) {
@@ -187,4 +187,40 @@ export async function restoreEntries(userId) {
     seen.add(entry.date);
     return true;
   }).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * Register a recovery code for a user.
+ * Stores { kind: 'nudge-recovery-v1', userId } tagged with 'recovery' and a hash of the code.
+ * The code hash tag allows finding the userId later without knowing the userId itself.
+ */
+export async function registerRecoveryCode(userId, recoveryCode) {
+  const hash = await codeHash(recoveryCode);
+  return addMemory(JSON.stringify({ kind: 'nudge-recovery-v1', userId }), userId, 'recovery', [hash]);
+}
+
+/**
+ * Find a userId by recovery code.
+ * Searches for recovery memories tagged with the code hash,
+ * then extracts the userId from the stored JSON.
+ */
+export async function recoverUserId(recoveryCode) {
+  const hash = await codeHash(recoveryCode);
+  const records = await searchRawMemories([
+    { filterType: 'array_contains', key: 'tags', value: 'recovery' },
+    { filterType: 'array_contains', key: 'tags', value: hash },
+  ], 'nudge recovery account', 10);
+  for (const record of records) {
+    const content = record.chunks?.[0]?.content ?? record.content ?? '';
+    try {
+      const userId = JSON.parse(content).userId;
+      if (typeof userId === 'string' && userId.length > 0) return userId;
+    } catch {}
+  }
+  return null;
+}
+
+async function codeHash(code) {
+  const { createHash } = await import('node:crypto');
+  return createHash('sha256').update(code.trim().toUpperCase()).digest('hex');
 }

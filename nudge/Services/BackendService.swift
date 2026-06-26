@@ -437,6 +437,52 @@ enum BackendService {
             return nil
         }
     }
+
+    // MARK: - Recovery code
+
+    static func registerRecoveryCode() async {
+        guard let url = URL(string: "\(baseURL)/api/recovery/register") else { return }
+        let body = ["userId": UserService.userId, "recoveryCode": UserService.recoveryCode]
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 10
+        _ = try? await URLSession.shared.data(for: request)
+    }
+
+    static func restoreAccount(recoveryCode: String) async throws {
+        guard let url = URL(string: "\(baseURL)/api/recovery/restore") else {
+            throw URLError(.badURL)
+        }
+        let normalizedCode = recoveryCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["recoveryCode": normalizedCode])
+        request.timeoutInterval = 15
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.userAuthenticationRequired)
+        }
+        let userId = try JSONDecoder().decode(AccountRestoreResponse.self, from: data).userId
+        UserService.restoreAccount(userId: userId, recoveryCode: normalizedCode)
+        await registerRecoveryCode()
+    }
+
+    /// Manually claim data from another userId (if the user knows their old userId)
+    static func restoreEntriesForUserId(_ oldUserId: String) async throws -> [RestoredEntry] {
+        guard let url = URL(string: "\(baseURL)/api/entries?userId=\(oldUserId)") else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 30
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode(EntryRestoreResponse.self, from: data).entries
+    }
 }
 
 private struct NudgeResponse: Decodable {
@@ -486,4 +532,8 @@ struct RestoredEntry: Decodable {
 
 private struct EntryRestoreResponse: Decodable {
     let entries: [RestoredEntry]
+}
+
+private struct AccountRestoreResponse: Decodable {
+    let userId: String
 }

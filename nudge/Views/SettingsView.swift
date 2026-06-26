@@ -36,6 +36,21 @@ struct SettingsView: View {
     @State private var deleteMemoryResult: String? = nil
     @State private var deleteMemoryFailed = false
 
+    // Recovery state
+    @State private var showRecoveryCode = false
+    @State private var showRecoveryCodeField = false
+    @State private var recoveryInput = ""
+    @State private var isRestoring = false
+    @State private var restoreMessage: String? = nil
+    @State private var restoreFailed = false
+
+    // Manual restore by userId
+    @State private var showManualUserId = false
+    @State private var manualUserIdInput = ""
+    @State private var isManualRestoring = false
+    @State private var manualRestoreMessage: String? = nil
+    @State private var manualRestoreFailed = false
+
     // Notification time pickers
     @State private var eveningTime  = Self.minutesToDate(NotificationService.eveningMinutes)
     @State private var morningTime  = Self.minutesToDate(NotificationService.morningMinutes)
@@ -148,8 +163,147 @@ struct SettingsView: View {
                         Text("\(entries.count)")
                             .foregroundStyle(.secondary)
                     }
+                    Button {
+                        withAnimation { showRecoveryCode.toggle() }
+                    } label: {
+                        HStack {
+                            Label("Recovery code", systemImage: "key")
+                            Spacer()
+                            if showRecoveryCode {
+                                Text(UserService.recoveryCode)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            } else {
+                                Text(Image(systemName: "chevron.forward"))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    if showRecoveryCode {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Save this code somewhere safe. If you lose your data, you can use it to restore your check-in history on any device.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Button {
+                                UIPasteboard.general.string = UserService.recoveryCode
+                            } label: {
+                                Label("Copy code", systemImage: "doc.on.doc")
+                                    .font(.caption)
+                            }
+                            Button {
+                                Task { await BackendService.registerRecoveryCode() }
+                            } label: {
+                                Label("Sync to cloud", systemImage: "icloud.and.arrow.up")
+                                    .font(.caption)
+                            }
+                        }
+                        .padding(.leading, 32)
+                    }
                 } header: {
                     Text("Account")
+                } footer: {
+                    Text("Your recovery code lets you restore your check-in history if you lose your user ID.")
+                }
+
+                // MARK: - Restore section
+                Section {
+                    Button {
+                        withAnimation { showRecoveryCodeField.toggle() }
+                    } label: {
+                        HStack {
+                            Label("Restore by recovery code", systemImage: "arrow.clockwise")
+                            Spacer()
+                            Text(Image(systemName: "chevron.forward"))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    if showRecoveryCodeField {
+                        VStack(spacing: 10) {
+                            Text("Enter the recovery code from your previous install to restore your check-in history.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            TextField("Paste recovery code", text: $recoveryInput)
+                                .font(.caption.monospaced())
+                                .textFieldStyle(.roundedBorder)
+                                .autocorrectionDisabled()
+                                .autocapitalization(.none)
+                            Button {
+                                recoverFromRecoveryCode()
+                            } label: {
+                                HStack {
+                                    if isRestoring {
+                                        ProgressView().padding(.trailing, 6)
+                                    }
+                                    Label("Restore", systemImage: "arrow.clockwise")
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .brandSelectedSurface(isSelected: false)
+                            }
+                            .disabled(recoveryInput.trimmingCharacters(in: .whitespaces).isEmpty || isRestoring)
+                            if let msg = restoreMessage {
+                                HStack {
+                                    Image(systemName: restoreFailed ? "xmark.circle.fill" : "checkmark.circle.fill")
+                                        .foregroundStyle(restoreFailed ? .red : .green)
+                                    Text(msg)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.leading, 8)
+                    }
+                    Button {
+                        withAnimation { showManualUserId.toggle() }
+                    } label: {
+                        HStack {
+                            Label("Restore by user ID", systemImage: "person.fill.questionmark")
+                            Spacer()
+                            Text(Image(systemName: "chevron.forward"))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    if showManualUserId {
+                        VStack(spacing: 10) {
+                            Text("If you know your previous user ID (e.g. from a screenshot or note), paste it here to claim your old data.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            TextField("Paste old user ID", text: $manualUserIdInput)
+                                .font(.caption.monospaced())
+                                .textFieldStyle(.roundedBorder)
+                                .autocorrectionDisabled()
+                                .autocapitalization(.none)
+                            Button {
+                                restoreFromUserId()
+                            } label: {
+                                HStack {
+                                    if isManualRestoring {
+                                        ProgressView().padding(.trailing, 6)
+                                    }
+                                    Label("Restore", systemImage: "arrow.clockwise")
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .brandSelectedSurface(isSelected: false)
+                            }
+                            .disabled(manualUserIdInput.trimmingCharacters(in: .whitespaces).isEmpty || isManualRestoring)
+                            if let msg = manualRestoreMessage {
+                                HStack {
+                                    Image(systemName: manualRestoreFailed ? "xmark.circle.fill" : "checkmark.circle.fill")
+                                        .foregroundStyle(manualRestoreFailed ? .red : .green)
+                                    Text(msg)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.leading, 8)
+                    }
+                } header: {
+                    Text("Restore history")
+                } footer: {
+                    Text("Enter your recovery code or old user ID to restore check-ins from a previous install.")
                 }
 
                 // MARK: - Notification times
@@ -367,6 +521,95 @@ struct SettingsView: View {
             }
         }
     }
+
+    // MARK: - Recovery actions
+
+    private func recoverFromRecoveryCode() {
+        let code = recoveryInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !code.isEmpty else { return }
+
+        isRestoring = true
+        restoreMessage = nil
+        restoreFailed = false
+
+        Task {
+            do {
+                try await BackendService.restoreAccount(recoveryCode: code)
+                // Now restore entries using the restored userId
+                let restored = try await BackendService.restoreEntries()
+                let existingDays = Set(entries.map { Calendar.current.startOfDay(for: $0.date) })
+                var imported = 0
+                for item in restored {
+                    guard let date = Self.restoreDateFormatter.date(from: item.date) else { continue }
+                    let day = Calendar.current.startOfDay(for: date)
+                    guard !existingDays.contains(day) else { continue }
+                    let entry = Entry(date: day, didMove: item.didMove, activities: item.activities, note: item.note)
+                    entry.synced = true
+                    modelContext.insert(entry)
+                    imported += 1
+                }
+                try modelContext.save()
+                await MainActor.run {
+                    isRestoring = false
+                    restoreMessage = imported == 0
+                        ? "Account restored — no new check-ins found."
+                        : "Restored \(imported) \(imported == 1 ? "check-in" : "check-ins")."
+                }
+            } catch {
+                await MainActor.run {
+                    isRestoring = false
+                    restoreFailed = true
+                    restoreMessage = "Couldn't restore. Check your recovery code and try again."
+                }
+            }
+        }
+    }
+
+    private func restoreFromUserId() {
+        let oldUserId = manualUserIdInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !oldUserId.isEmpty else { return }
+
+        isManualRestoring = true
+        manualRestoreMessage = nil
+        manualRestoreFailed = false
+
+        Task {
+            do {
+                let restored = try await BackendService.restoreEntriesForUserId(oldUserId)
+                let existingDays = Set(entries.map { Calendar.current.startOfDay(for: $0.date) })
+                var imported = 0
+                for item in restored {
+                    guard let date = Self.restoreDateFormatter.date(from: item.date) else { continue }
+                    let day = Calendar.current.startOfDay(for: date)
+                    guard !existingDays.contains(day) else { continue }
+                    let entry = Entry(date: day, didMove: item.didMove, activities: item.activities, note: item.note)
+                    entry.synced = true
+                    modelContext.insert(entry)
+                    imported += 1
+                }
+                try modelContext.save()
+                await MainActor.run {
+                    isManualRestoring = false
+                    manualRestoreMessage = imported == 0
+                        ? "No check-ins found for that user ID."
+                        : "Restored \(imported) \(imported == 1 ? "check-in" : "check-ins")."
+                }
+            } catch {
+                await MainActor.run {
+                    isManualRestoring = false
+                    manualRestoreFailed = true
+                    manualRestoreMessage = "Couldn't restore. Check the user ID and try again."
+                }
+            }
+        }
+    }
+
+    private static let restoreDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        return f
+    }()
 }
 
 // MARK: - Edit Profile View
