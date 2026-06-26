@@ -160,6 +160,39 @@ function legacyDateKey(value) {
   return `${match[3]}-${String(month).padStart(2, '0')}-${match[2].padStart(2, '0')}`;
 }
 
+/**
+ * Scan ALL nudge-tagged documents from Supermemory (no userId filter).
+ * Returns every entry-type document. Use as a last-resort recovery.
+ */
+export async function scanAllEntries() {
+  const records = await searchRawMemories([
+    { filterType: 'array_contains', key: 'tags', value: 'nudge' },
+    { filterType: 'array_contains', key: 'tags', value: 'entry' },
+  ], 'movement check-in activity note steps workout', 1000);
+
+  const seen = new Set();
+  return records.map(record => {
+    const content = record.chunks?.[0]?.content ?? record.content ?? '';
+    const snapshot = record.metadata?.nudgeEntry;
+    if (snapshot?.date && typeof snapshot.didMove === 'boolean') return snapshot;
+
+    const match = content.match(/^On (.+?), the user (did move|did not move)\.\s*(?:Activities: (.*?)\.\s*)?(?:Note: "(.*?)"\.)?/);
+    if (!match) return null;
+    const date = legacyDateKey(match[1]);
+    if (!date) return null;
+    return {
+      date,
+      didMove: match[2] === 'did move',
+      activities: match[3] ? match[3].split(', ').filter(Boolean) : [],
+      note: match[4] || null,
+    };
+  }).filter(entry => {
+    if (!entry || seen.has(entry.date)) return false;
+    seen.add(entry.date);
+    return true;
+  }).sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export async function restoreEntries(userId) {
   const records = await searchRawMemories([
     { filterType: 'array_contains', key: 'tags', value: userId },

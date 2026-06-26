@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { addMemory, deleteAllEntries, checkUserHasEntries, restoreEntries } from '../services/supermemory.js';
+import { addMemory, deleteAllEntries, checkUserHasEntries, restoreEntries, scanAllEntries } from '../services/supermemory.js';
 
 const router = Router();
 
@@ -86,6 +86,22 @@ router.delete('/', async (req, res) => {
   } catch (err) {
     console.error('[entries] Delete error:', err.message);
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/entries/recover-all
+ *
+ * Last-resort recovery: scans ALL nudge entries in Supermemory
+ * without requiring a userId. Returns everything found.
+ */
+router.get('/recover-all', async (req, res) => {
+  try {
+    const entries = await scanAllEntries();
+    res.json({ entries });
+  } catch (err) {
+    console.error('[entries] Recover-all error:', err.message);
+    res.status(500).json({ error: 'Could not scan entries' });
   }
 });
 

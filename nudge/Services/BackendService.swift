@@ -470,6 +470,19 @@ enum BackendService {
         await registerRecoveryCode()
     }
 
+    /// Last resort: scan ALL nudge entries from Supermemory (no userId filter)
+    static func recoverAllEntries() async -> [RestoredEntry] {
+        guard let url = URL(string: "\(baseURL)/api/entries/recover-all") else { return [] }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 30
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse, http.statusCode == 200,
+              let result = try? JSONDecoder().decode(EntryRestoreResponse.self, from: data) else {
+            return []
+        }
+        return result.entries
+    }
+
     /// Manually claim data from another userId (if the user knows their old userId)
     static func restoreEntriesForUserId(_ oldUserId: String) async throws -> [RestoredEntry] {
         guard let url = URL(string: "\(baseURL)/api/entries?userId=\(oldUserId)") else {
