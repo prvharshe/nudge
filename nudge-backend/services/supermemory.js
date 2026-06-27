@@ -143,7 +143,7 @@ export async function checkUserHasEntries(userId) {
   };
 }
 
-async function searchRawMemories(filters, query, limit = 500) {
+async function searchRawMemories(filters, query, limit = 100) {
   const res = await fetch(`${BASE}/search`, {
     method: 'POST',
     headers: headers(),
@@ -168,7 +168,7 @@ export async function scanAllEntries() {
   const records = await searchRawMemories([
     { filterType: 'array_contains', key: 'tags', value: 'nudge' },
     { filterType: 'array_contains', key: 'tags', value: 'entry' },
-  ], 'movement check-in activity note steps workout', 1000);
+  ], 'movement check-in activity note steps workout', 100);
 
   const seen = new Set();
   return records.map(record => {
@@ -197,7 +197,7 @@ export async function restoreEntries(userId) {
   const records = await searchRawMemories([
     { filterType: 'array_contains', key: 'tags', value: userId },
     { filterType: 'array_contains', key: 'tags', value: 'entry' },
-  ], 'movement check-in activity note steps workout', 500);
+  ], 'movement check-in activity note steps workout', 100);
 
   const seen = new Set();
   return records.map(record => {
