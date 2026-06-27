@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { addMemory, deleteAllEntries } from '../services/supermemory.js';
+import { addMemory, deleteAllEntries, checkUserHasEntries, restoreEntries, scanAllEntries } from '../services/supermemory.js';
 
 const router = Router();
 
@@ -50,6 +50,23 @@ router.post('/', async (req, res) => {
 });
 
 /**
+ * GET /api/entries?userId=...
+ *
+ * Returns all entries for a user, for restoring history on reinstall.
+ */
+router.get('/', async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.status(400).json({ error: 'userId is required' });
+  try {
+    const entries = await restoreEntries(userId);
+    res.json({ entries });
+  } catch (err) {
+    console.error('[entries] Restore error:', err.message);
+    res.status(500).json({ error: 'Could not restore entries' });
+  }
+});
+
+/**
  * DELETE /api/entries?userId=...
  *
  * Permanently deletes all Supermemory entries for this user.
@@ -69,6 +86,40 @@ router.delete('/', async (req, res) => {
   } catch (err) {
     console.error('[entries] Delete error:', err.message);
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/entries/recover-all
+ *
+ * Last-resort recovery: scans ALL nudge entries in Supermemory
+ * without requiring a userId. Returns everything found.
+ */
+router.get('/recover-all', async (req, res) => {
+  try {
+    const entries = await scanAllEntries();
+    res.json({ entries });
+  } catch (err) {
+    console.error('[entries] Recover-all error:', err.message);
+    res.status(500).json({ error: 'Could not scan entries' });
+  }
+});
+
+/**
+ * GET /api/entries/exists?userId=...
+ *
+ * Lightweight check if user has any entries in Supermemory.
+ * Returns { hasEntries: boolean, count: number, latestDate: string|null }
+ */
+router.get('/exists', async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.status(400).json({ error: 'userId is required' });
+  try {
+    const result = await checkUserHasEntries(userId);
+    res.json(result);
+  } catch (err) {
+    console.error('[entries] Exists check error:', err.message);
+    res.status(500).json({ error: 'Could not check entries' });
   }
 });
 
