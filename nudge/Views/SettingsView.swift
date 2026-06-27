@@ -56,6 +56,12 @@ struct SettingsView: View {
     @State private var scanMessage: String? = nil
     @State private var scanFailed = false
 
+    // Admin PIN
+    @State private var adminUnlocked = false
+    @State private var showAdminPinPrompt = false
+    @State private var adminPinInput = ""
+    @AppStorage("nudge.adminPin") private var adminPin = "1234"
+
     // Notification time pickers
     @State private var eveningTime  = Self.minutesToDate(NotificationService.eveningMinutes)
     @State private var morningTime  = Self.minutesToDate(NotificationService.morningMinutes)
@@ -152,6 +158,67 @@ struct SettingsView: View {
                 } footer: {
                     Text("Upload blood tests or lab reports. Biomarkers are extracted and saved to your Coach memory for personalised insights.")
                 }
+
+                // MARK: - Notification times
+                Section {
+                    DatePicker(
+                        "Evening check-in",
+                        selection: $eveningTime,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .onChange(of: eveningTime) { _, newVal in
+                        NotificationService.setEvening(Self.dateToMinutes(newVal))
+                    }
+
+                    DatePicker(
+                        "Morning nudge",
+                        selection: $morningTime,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .onChange(of: morningTime) { _, newVal in
+                        NotificationService.setMorning(Self.dateToMinutes(newVal))
+                    }
+
+                    DatePicker(
+                        "Follow-up reminder",
+                        selection: $followUpTime,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .onChange(of: followUpTime) { _, newVal in
+                        NotificationService.setFollowUp(Self.dateToMinutes(newVal))
+                    }
+                } header: {
+                    Text("Notifications")
+                } footer: {
+                    Text("The follow-up reminder only fires on days you haven't logged yet.")
+                }
+
+                // MARK: - Admin lock gate
+                Section {
+                    if adminUnlocked {
+                        Button(role: .destructive) {
+                            adminUnlocked = false
+                        } label: {
+                            Label("Lock advanced settings", systemImage: "lock.fill")
+                        }
+                    } else {
+                        Button {
+                            adminPinInput = ""
+                            showAdminPinPrompt = true
+                        } label: {
+                            Label("Advanced settings", systemImage: "lock.open")
+                                .foregroundStyle(Theme.brandCoral)
+                        }
+                    }
+                } header: {
+                    Text("Advanced")
+                } footer: {
+                    if !adminUnlocked {
+                        Text("Account recovery, data reset, and AI memory controls are PIN-protected.")
+                    }
+                }
+
+                if adminUnlocked {
 
                 // MARK: - Info section
                 Section {
@@ -333,40 +400,6 @@ struct SettingsView: View {
                     Text("Enter your recovery code or old user ID to restore check-ins from a previous install. As a last resort, tap \"Scan Supermemory\" to find all your data.")
                 }
 
-                // MARK: - Notification times
-                Section {
-                    DatePicker(
-                        "Evening check-in",
-                        selection: $eveningTime,
-                        displayedComponents: .hourAndMinute
-                    )
-                    .onChange(of: eveningTime) { _, newVal in
-                        NotificationService.setEvening(Self.dateToMinutes(newVal))
-                    }
-
-                    DatePicker(
-                        "Morning nudge",
-                        selection: $morningTime,
-                        displayedComponents: .hourAndMinute
-                    )
-                    .onChange(of: morningTime) { _, newVal in
-                        NotificationService.setMorning(Self.dateToMinutes(newVal))
-                    }
-
-                    DatePicker(
-                        "Follow-up reminder",
-                        selection: $followUpTime,
-                        displayedComponents: .hourAndMinute
-                    )
-                    .onChange(of: followUpTime) { _, newVal in
-                        NotificationService.setFollowUp(Self.dateToMinutes(newVal))
-                    }
-                } header: {
-                    Text("Notifications")
-                } footer: {
-                    Text("The follow-up reminder only fires on days you haven't logged yet.")
-                }
-
                 // MARK: - Reset local data
                 Section {
                     Button(role: .destructive) {
@@ -467,6 +500,24 @@ struct SettingsView: View {
                     Text("Leave empty to use the Railway production server. This section is only visible in Debug builds.")
                 }
                 #endif
+
+                // MARK: - Change admin PIN
+                Section {
+                    HStack {
+                        Text("Change PIN")
+                        Spacer()
+                        SecureField("New PIN", text: $adminPin)
+                            .multilineTextAlignment(.trailing)
+                            .keyboardType(.numberPad)
+                            .frame(width: 80)
+                    }
+                } header: {
+                    Text("Admin PIN")
+                } footer: {
+                    Text("Used to unlock this advanced section. Default is 1234.")
+                }
+
+                } // end if adminUnlocked
             }
             .scrollContentBackground(.hidden)
             .background(AmbientBackground())
@@ -483,6 +534,19 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showUploadReport) {
                 UploadReportView()
+            }
+            .alert("Enter PIN", isPresented: $showAdminPinPrompt) {
+                SecureField("PIN", text: $adminPinInput)
+                    .keyboardType(.numberPad)
+                Button("Unlock") {
+                    if adminPinInput == adminPin {
+                        adminUnlocked = true
+                    }
+                    adminPinInput = ""
+                }
+                Button("Cancel", role: .cancel) { adminPinInput = "" }
+            } message: {
+                Text("Enter your admin PIN to access advanced settings.")
             }
         }
     }
