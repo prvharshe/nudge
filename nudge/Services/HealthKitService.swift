@@ -598,6 +598,50 @@ final class HealthKitService {
         }
     }
 
+    /// Per-day sleep stage totals for the last `days` days, oldest-first.
+    func fetchSleepStageBreakdown(days: Int) async -> [(date: Date, deep: Double, rem: Double, light: Double)] {
+        guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { return [] }
+        let cal = Calendar.current
+        let dayStart = cal.startOfDay(for: .now)
+        guard let windowStart = cal.date(byAdding: .day, value: -days, to: dayStart) else { return [] }
+        let predicate = HKQuery.predicateForSamples(withStart: windowStart, end: .now, options: .strictStartDate)
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: sleepType, predicate: predicate,
+                limit: HKObjectQueryNoLimit, sortDescriptors: [sort]
+            ) { _, samples, _ in
+                guard let samples = samples as? [HKCategorySample], !samples.isEmpty else {
+                    continuation.resume(returning: [])
+                    return
+                }
+                var byDay: [Date: (deep: Double, rem: Double, light: Double)] = [:]
+                for s in samples {
+                    let wakeDay = cal.startOfDay(for: s.endDate)
+                    let hours = s.endDate.timeIntervalSince(s.startDate) / 3600
+                    switch HKCategoryValueSleepAnalysis(rawValue: s.value) {
+                    case .asleepDeep:
+                        byDay[wakeDay, default: (0, 0, 0)].deep += hours
+                    case .asleepREM:
+                        byDay[wakeDay, default: (0, 0, 0)].rem += hours
+                    case .asleepCore, .asleepUnspecified:
+                        byDay[wakeDay, default: (0, 0, 0)].light += hours
+                    default:
+                        break
+                    }
+                }
+                let result = byDay.compactMap { (date, stages) -> (Date, Double, Double, Double)? in
+                    let total = stages.deep + stages.rem + stages.light
+                    guard total >= 0.5 else { return nil }
+                    return (date, stages.deep, stages.rem, stages.light)
+                }
+                continuation.resume(returning: result.sorted { $0.0 < $1.0 })
+            }
+            self.store.execute(query)
+        }
+    }
+
     /// Average daily macros over the last `days` days (only counts days with logged data).
     func fetchNutritionAverages(days: Int) async -> (kcal: Int?, protein: Int?, carbs: Int?, fat: Int?) {
         guard HKHealthStore.isHealthDataAvailable() else { return (nil, nil, nil, nil) }

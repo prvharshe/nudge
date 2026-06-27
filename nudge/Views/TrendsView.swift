@@ -11,6 +11,7 @@ struct TrendsView: View {
     @State private var stepHistory:  [(date: Date, steps: Int)]    = []
     @State private var rhrHistory:   [(date: Date, rhr: Int)]      = []
     @State private var sleepHistory: [(date: Date, hours: Double)] = []
+    @State private var sleepStages:  [(date: Date, deep: Double, rem: Double, light: Double)] = []
     @State private var nutrition = NutritionAvg()
     @State private var isLoading = true
 
@@ -31,6 +32,7 @@ struct TrendsView: View {
                             if !weekdayData.isEmpty { dayPatternCard }
                             if !stepHistory.isEmpty { stepTrendCard }
                             if sleepOnMovedDays != nil || sleepOnRestDays != nil { sleepCard }
+                            if !sleepStages.isEmpty { sleepStagesCard }
                             if !rhrHistory.isEmpty { recoveryCard }
                             if nutrition.hasData { nutritionCard }
                         }
@@ -125,13 +127,15 @@ struct TrendsView: View {
         async let steps   = HealthKitService.shared.fetchStepHistory(days: 30)
         async let rhr     = HealthKitService.shared.fetchRHRHistory(days: 14)
         async let sleep   = HealthKitService.shared.fetchSleepHistory(days: 30)
+        async let stages  = HealthKitService.shared.fetchSleepStageBreakdown(days: 14)
         async let nutr    = HealthKitService.shared.fetchNutritionAverages(days: 7)
 
-        let (s, r, sl, n) = await (steps, rhr, sleep, nutr)
+        let (s, r, sl, st, n) = await (steps, rhr, sleep, stages, nutr)
         await MainActor.run {
             stepHistory  = s
             rhrHistory   = r
             sleepHistory = sl
+            sleepStages  = st
             nutrition    = NutritionAvg(kcal: n.kcal, protein: n.protein, carbs: n.carbs, fat: n.fat)
             isLoading    = false
         }
@@ -397,6 +401,70 @@ struct TrendsView: View {
         }
     }
 
+    // MARK: - Sleep stages breakdown
+
+    private var sleepStagesCard: some View {
+        TrendCard(title: "Sleep Stages", subtitle: "14 days · deep / REM / light") {
+            VStack(spacing: 12) {
+                Chart {
+                    ForEach(sleepStages, id: \.date) { day in
+                        BarMark(
+                            x: .value("Date", day.date, unit: .day),
+                            y: .value("Hours", day.deep)
+                        )
+                        .foregroundStyle(by: .value("Stage", "Deep"))
+
+                        BarMark(
+                            x: .value("Date", day.date, unit: .day),
+                            y: .value("Hours", day.rem)
+                        )
+                        .foregroundStyle(by: .value("Stage", "REM"))
+
+                        BarMark(
+                            x: .value("Date", day.date, unit: .day),
+                            y: .value("Hours", day.light)
+                        )
+                        .foregroundStyle(by: .value("Stage", "Light"))
+                    }
+                }
+                .chartForegroundStyleScale([
+                    "Deep": Theme.blue,
+                    "REM": Theme.purple,
+                    "Light": Theme.green.opacity(0.7)
+                ])
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .day, count: 7)) {
+                        AxisValueLabel(format: .dateTime.month(.abbreviated).day()).font(.caption2)
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(values: .automatic(desiredCount: 4)) { value in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
+                        AxisValueLabel {
+                            if let v = value.as(Double.self) {
+                                Text(String(format: "%.0fh", v)).font(.caption2)
+                            }
+                        }
+                    }
+                }
+                .chartLegend(position: .bottom, alignment: .leading)
+                .frame(height: 140)
+
+                // Averages row
+                let avgDeep  = sleepStages.map(\.deep).reduce(0, +)  / Double(sleepStages.count)
+                let avgREM   = sleepStages.map(\.rem).reduce(0, +)   / Double(sleepStages.count)
+                let avgLight = sleepStages.map(\.light).reduce(0, +) / Double(sleepStages.count)
+                HStack(spacing: 0) {
+                    StagePill(label: "Deep",  hours: avgDeep,  color: Theme.blue)
+                    Spacer()
+                    StagePill(label: "REM",   hours: avgREM,   color: Theme.purple)
+                    Spacer()
+                    StagePill(label: "Light", hours: avgLight, color: Theme.green.opacity(0.7))
+                }
+            }
+        }
+    }
+
     // MARK: - Recovery (RHR sparkline)
 
     private var recoveryCard: some View {
@@ -538,6 +606,25 @@ private struct LegendDot: View {
                 .frame(width: 10, height: 10)
             Text(label).font(.caption2).foregroundStyle(.secondary)
         }
+    }
+}
+
+private struct StagePill: View {
+    let label: String
+    let hours: Double
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 3) {
+            Text(String(format: "%.1fh", hours))
+                .font(.system(.subheadline, design: .rounded).weight(.bold))
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
     }
 }
 

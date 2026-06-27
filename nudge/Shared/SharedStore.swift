@@ -61,4 +61,11 @@ enum SharedStore {
     static func clearPendingCheckIn() {
         defaults.removeObject(forKey: "widget.pendingCheckIn")
     }
+
+    // MARK: - Current streak (written by main app, read by widget)
+
+    static var currentStreak: Int {
+        get { defaults.integer(forKey: "widget.currentStreak") }
+        set { defaults.set(newValue, forKey: "widget.currentStreak") }
+    }
 }

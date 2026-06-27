@@ -127,6 +127,14 @@ struct ContentView: View {
                 if todayEntry != nil {
                     NotificationService.updateEveningForLoggedDay()
                 }
+                // Weekly digest — re-schedule each foreground with fresh moved-day count
+                let cal = Calendar.current
+                let weekStart = cal.date(byAdding: .day, value: -6, to: cal.startOfDay(for: .now)) ?? .now
+                let thisWeek = entries.filter { $0.date >= weekStart }
+                NotificationService.scheduleWeeklyDigest(
+                    movedDays: thisWeek.filter(\.didMove).count,
+                    totalDays: thisWeek.count
+                )
             }
         }
     }
@@ -319,6 +327,8 @@ struct TodayDoneView: View {
     @State private var todaySteps: Int? = nil
     @State private var recoveryScore: RecoveryScore? = nil
     @State private var learnInsight: String? = nil
+    @State private var showMilestoneCelebration = false
+    @State private var celebrationStreak = 0
 
 
     private var accent: Color { entry.didMove ? Theme.green : Theme.muted }
@@ -562,9 +572,14 @@ struct TodayDoneView: View {
                 recoveryLabel: recoveryScore?.label
             )
 
+            // Write current streak to shared store so the widget can display it
+            let currentStreak = streak.current
+            SharedStore.currentStreak = currentStreak
+            WidgetCenter.shared.reloadAllTimelines()
+
             // Milestone detection: store significant streaks in Supermemory once per occurrence
             if entry.didMove {
-                let s = streak.current
+                let s = currentStreak
                 let milestoneValues = [7, 30, 100]
                 if milestoneValues.contains(s) {
                     let dayKey = Calendar.current.startOfDay(for: entry.date).timeIntervalSince1970
@@ -574,9 +589,16 @@ struct TodayDoneView: View {
                         let content = "[Milestone] Achieved a \(s)-day movement streak, completed on \(dateStr). This is a significant personal achievement."
                         await BackendService.storeMemory(type: .milestone, content: content)
                         UserDefaults.standard.set(true, forKey: milestoneKey)
+                        celebrationStreak = s
+                        showMilestoneCelebration = true
                     }
                 }
             }
+        }
+        .sheet(isPresented: $showMilestoneCelebration) {
+            MilestoneCelebrationView(streak: celebrationStreak)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
         }
         .safeAreaInset(edge: .bottom) {
             Button {

@@ -12,21 +12,22 @@ import AppIntents
 struct NudgeEntry: TimelineEntry {
     let date: Date
     let checkIn: CheckInRecord?
+    let streak: Int
 }
 
 // MARK: - Timeline Provider
 
 struct NudgeWidgetProvider: TimelineProvider {
     func placeholder(in context: Context) -> NudgeEntry {
-        NudgeEntry(date: .now, checkIn: nil)
+        NudgeEntry(date: .now, checkIn: nil, streak: 0)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (NudgeEntry) -> Void) {
-        completion(NudgeEntry(date: .now, checkIn: SharedStore.todayCheckIn))
+        completion(NudgeEntry(date: .now, checkIn: SharedStore.todayCheckIn, streak: SharedStore.currentStreak))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<NudgeEntry>) -> Void) {
-        let entry = NudgeEntry(date: .now, checkIn: SharedStore.todayCheckIn)
+        let entry = NudgeEntry(date: .now, checkIn: SharedStore.todayCheckIn, streak: SharedStore.currentStreak)
         // Refresh at midnight so the widget resets for a new day
         let midnight = Calendar.current.startOfDay(
             for: Calendar.current.date(byAdding: .day, value: 1, to: .now)!
@@ -43,9 +44,9 @@ struct NudgeWidgetView: View {
     var body: some View {
         Group {
             if let checkIn = entry.checkIn {
-                CheckedInWidgetView(checkIn: checkIn)
+                CheckedInWidgetView(checkIn: checkIn, streak: entry.streak)
             } else {
-                CheckInPromptWidgetView()
+                CheckInPromptWidgetView(streak: entry.streak)
             }
         }
         .containerBackground(for: .widget) { Color(.systemBackground) }
@@ -55,12 +56,22 @@ struct NudgeWidgetView: View {
 // MARK: - Prompt View (not yet logged today)
 
 struct CheckInPromptWidgetView: View {
+    let streak: Int
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
 
-            Text("nudge")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline) {
+                Text("nudge")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if streak > 0 {
+                    Text("🔥\(streak)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.orange)
+                }
+            }
 
             Spacer(minLength: 6)
 
@@ -112,6 +123,7 @@ struct CheckInPromptWidgetView: View {
 
 struct CheckedInWidgetView: View {
     let checkIn: CheckInRecord
+    let streak: Int
 
     private var emoji: String { checkIn.didMove ? "🙌" : "😴" }
     private var label: String { checkIn.didMove ? "Moved\ntoday" : "Rest day\nlogged" }
@@ -141,6 +153,13 @@ struct CheckedInWidgetView: View {
                 .font(.system(size: 15, weight: .bold, design: .rounded))
                 .lineSpacing(2)
                 .foregroundStyle(accent)
+
+            if streak > 1 {
+                Spacer(minLength: 4)
+                Text("🔥 \(streak) day streak")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(.orange)
+            }
         }
         .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -169,7 +188,7 @@ struct NudgeWidget: Widget {
 #Preview(as: .systemSmall) {
     NudgeWidget()
 } timeline: {
-    NudgeEntry(date: .now, checkIn: nil)
-    NudgeEntry(date: .now, checkIn: CheckInRecord(didMove: true,  date: .now))
-    NudgeEntry(date: .now, checkIn: CheckInRecord(didMove: false, date: .now))
+    NudgeEntry(date: .now, checkIn: nil, streak: 0)
+    NudgeEntry(date: .now, checkIn: CheckInRecord(didMove: true,  date: .now), streak: 7)
+    NudgeEntry(date: .now, checkIn: CheckInRecord(didMove: false, date: .now), streak: 3)
 }

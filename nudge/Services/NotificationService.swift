@@ -103,6 +103,49 @@ enum NotificationService {
             .removePendingNotificationRequests(withIdentifiers: ["follow-up-reminder"])
     }
 
+    // MARK: - Weekly digest (one-shot, re-scheduled each app launch with fresh data)
+
+    /// Schedules a Saturday 9am notification summarising the week's activity.
+    /// Call on every app foreground so the content reflects the latest data.
+    static func scheduleWeeklyDigest(movedDays: Int, totalDays: Int) {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: ["weekly-digest"])
+
+        let cal = Calendar.current
+        let now = Date.now
+        // weekday: 1=Sun … 7=Sat
+        let currentWeekday = cal.component(.weekday, from: now)
+        let daysUntilSat = currentWeekday == 7 ? 7 : (7 - currentWeekday)
+        guard let nextSat = cal.date(byAdding: .day, value: daysUntilSat, to: cal.startOfDay(for: now)),
+              let fireDate = cal.date(bySettingHour: 9, minute: 0, second: 0, of: nextSat),
+              fireDate > now else { return }
+
+        let content = UNMutableNotificationContent()
+        content.sound = .default
+        content.userInfo = ["type": "nudge"]
+
+        switch (movedDays, totalDays) {
+        case (0, _):
+            content.title = "New week, fresh start 🌱"
+            content.body  = "Every big streak starts with one day. Today?"
+        case let (m, t) where t > 0 && m == t && t >= 5:
+            content.title = "Perfect week! 🔥"
+            content.body  = "You moved every day this week. Open to see your streak."
+        case let (m, t) where t > 0:
+            content.title = "This week: \(m)/\(t) days ✅"
+            content.body  = m >= 4 ? "Strong week — your body thanks you." : "Progress over perfection — keep showing up."
+        default:
+            content.title = "Weekly check-in 📊"
+            content.body  = "See how your week shaped up."
+        }
+
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: fireDate.timeIntervalSinceNow,
+            repeats: false
+        )
+        center.add(UNNotificationRequest(identifier: "weekly-digest", content: content, trigger: trigger))
+    }
+
     // MARK: - Swap evening notification when user has already logged today
 
     /// Call this when the user has already logged for today.
