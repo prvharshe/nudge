@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftUI
+import Security
 
 // MARK: - Custom Activity
 
@@ -12,17 +13,38 @@ struct CustomActivity: Codable, Identifiable, Equatable {
 
 // MARK: - Activity Store
 
-/// Persists user-created custom activity types in UserDefaults.
+/// Persists user-created custom activity types.
+/// Saved to both UserDefaults (fast) and Keychain (survives reinstall).
 /// Access via `ActivityStore.shared` from any view.
 @Observable
 final class ActivityStore {
     static let shared = ActivityStore()
 
-    private let key = "nudge.customActivities"
+    private let defaultsKey = "nudge.customActivities"
+    private let keychainService = "com.ph.nudge"
+    private let keychainAccount = "nudge.customActivities"
 
     var activities: [CustomActivity] = []
 
     private init() { load() }
+
+    // MARK: - Display name
+
+    /// Returns the human-readable display string for an activity tag.
+    /// Falls back to "Custom activity" for unknown custom_ IDs.
+    static func displayName(for id: String) -> String {
+        switch id {
+        case "walk":  return "🚶 Walk"
+        case "run":   return "🏃 Run"
+        case "tired": return "😴 Too tired"
+        case "busy":  return "💼 Busy day"
+        default:
+            if let activity = shared.activities.first(where: { $0.id == id }) {
+                return "\(activity.emoji) \(activity.label)"
+            }
+            return id.hasPrefix("custom_") ? "⭐️ Custom activity" : id
+        }
+    }
 
     // MARK: - Mutations
 
@@ -53,14 +75,56 @@ final class ActivityStore {
 
     private func save() {
         guard let data = try? JSONEncoder().encode(activities) else { return }
-        UserDefaults.standard.set(data, forKey: key)
+        UserDefaults.standard.set(data, forKey: defaultsKey)
+        writeToKeychain(data)
     }
 
     private func load() {
-        guard
-            let data = UserDefaults.standard.data(forKey: key),
-            let list = try? JSONDecoder().decode([CustomActivity].self, from: data)
-        else { return }
-        activities = list
+        // UserDefaults is faster; Keychain is the reinstall fallback
+        if let data = UserDefaults.standard.data(forKey: defaultsKey),
+           let list = try? JSONDecoder().decode([CustomActivity].self, from: data) {
+            activities = list
+            return
+        }
+        if let data = readFromKeychain(),
+           let list = try? JSONDecoder().decode([CustomActivity].self, from: data) {
+            activities = list
+            UserDefaults.standard.set(data, forKey: defaultsKey)
+        }
+    }
+
+    // MARK: - Keychain helpers
+
+    private func writeToKeychain(_ data: Data) {
+        let attributes: [CFString: Any] = [
+            kSecClass:          kSecClassGenericPassword,
+            kSecAttrService:    keychainService,
+            kSecAttrAccount:    keychainAccount,
+            kSecValueData:      data,
+            kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlock,
+        ]
+        let status = SecItemAdd(attributes as CFDictionary, nil)
+        if status == errSecDuplicateItem {
+            let query: [CFString: Any] = [
+                kSecClass:       kSecClassGenericPassword,
+                kSecAttrService: keychainService,
+                kSecAttrAccount: keychainAccount,
+            ]
+            SecItemUpdate(query as CFDictionary, [kSecValueData: data] as CFDictionary)
+        }
+    }
+
+    private func readFromKeychain() -> Data? {
+        let query: [CFString: Any] = [
+            kSecClass:       kSecClassGenericPassword,
+            kSecAttrService: keychainService,
+            kSecAttrAccount: keychainAccount,
+            kSecReturnData:  true,
+            kSecMatchLimit:  kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess else { return nil }
+        return result as? Data
     }
 }

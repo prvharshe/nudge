@@ -461,18 +461,6 @@ struct EntryDetailView: View {
     @State private var stats: DayStats? = nil
     @State private var showEditSheet = false
 
-    private var activityLabels: [String: String] {
-        var labels: [String: String] = [
-            "walk": "🚶 Walk",
-            "run":  "🏃 Run",
-            "tired": "😴 Too tired",
-            "busy": "💼 Busy day"
-        ]
-        for a in ActivityStore.shared.activities {
-            labels[a.id] = "\(a.emoji) \(a.label)"
-        }
-        return labels
-    }
 
     private var emoji: String { entry.didMove ? "🙌" : "😴" }
     private var statusText: String { entry.didMove ? "Moved" : "Rest day" }
@@ -501,7 +489,7 @@ struct EntryDetailView: View {
                     if !entry.activities.isEmpty {
                         HStack(spacing: 8) {
                             ForEach(entry.activities, id: \.self) { tag in
-                                Text(activityLabels[tag] ?? tag)
+                                Text(ActivityStore.displayName(for: tag))
                                     .font(.subheadline)
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 7)

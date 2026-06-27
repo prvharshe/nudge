@@ -320,12 +320,6 @@ struct TodayDoneView: View {
     @State private var recoveryScore: RecoveryScore? = nil
     @State private var learnInsight: String? = nil
 
-    private let activityLabels: [String: String] = [
-        "walk": "🚶 Walk",
-        "run": "🏃 Run",
-        "tired": "😴 Too tired",
-        "busy": "💼 Busy day"
-    ]
 
     private var accent: Color { entry.didMove ? Theme.green : Theme.muted }
 
@@ -396,7 +390,7 @@ struct TodayDoneView: View {
                 if !entry.activities.isEmpty {
                     HStack(spacing: 8) {
                         ForEach(entry.activities, id: \.self) { tag in
-                            Text(activityLabels[tag] ?? tag)
+                            Text(ActivityStore.displayName(for: tag))
                                 .font(.subheadline.weight(.medium))
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 7)
