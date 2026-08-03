@@ -8,9 +8,11 @@ const router = express.Router();
  * POST /api/coach
  * Body: { userId, question, history?, goal?, profileSummary? }
  *
- * Runs two parallel Supermemory searches:
- *   1. Semantic search with the question → entries + insights + milestones + context + convos
- *   2. Targeted profile fetch → always include profile regardless of question
+ * Dual retrieval:
+ *   1. Recent dated check-ins (type: entry) — chronological primary context
+ *   2. Limited semantic entry hits tuned to the question
+ *   3. Profile memory (always)
+ * Insights/convos are excluded so old summaries don't drown recent check-ins.
  */
 router.post('/', async (req, res) => {
   const { userId, question, history, goal, profileSummary } = req.body;
@@ -24,18 +26,21 @@ router.post('/', async (req, res) => {
     : [];
 
   try {
-    const [entries, profileMems] = await Promise.all([
-      searchMemories(userId, 20, question.trim()),                          // all types, question-tuned
-      searchMemories(userId, 1, 'user profile fitness goals', 'profile'),   // always fetch profile
+    const q = question.trim();
+    const [recentEntries, semanticHits, profileMems] = await Promise.all([
+      searchMemories(userId, 14, 'movement exercise activity rest day check-in', 'entry'),
+      searchMemories(userId, 8, q, 'entry'),
+      searchMemories(userId, 1, 'user profile fitness goals', 'profile'),
     ]);
 
     const answer = await generateCoachAnswer(
-      entries,
-      question.trim(),
+      recentEntries,
+      q,
       conversationHistory,
       goal || null,
       profileSummary || null,
-      profileMems
+      profileMems,
+      semanticHits
     );
     res.json({ answer });
   } catch (err) {

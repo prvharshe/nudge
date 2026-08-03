@@ -1,5 +1,5 @@
 import express from 'express';
-import { searchEntries, addMemory } from '../services/supermemory.js';
+import { searchEntries } from '../services/supermemory.js';
 import { generateWeeklyInsight } from '../services/groq.js';
 
 const router = express.Router();
@@ -9,8 +9,10 @@ const router = express.Router();
  * Body: { userId }
  * Returns: { insight }
  *
- * Fetches up to 30 recent entries and generates a 3-sentence
- * weekly pattern analysis. Caching is handled client-side.
+ * Fetches recent check-in entries (type: entry only), sorts/filters by date
+ * inside generateWeeklyInsight. Caching is handled client-side.
+ * Weekly insights are NOT written back to Supermemory — that created a
+ * feedback loop where old summaries polluted coach/weekly retrieval.
  */
 router.post('/', async (req, res) => {
   const { userId, goal, profileSummary } = req.body;
@@ -22,11 +24,6 @@ router.post('/', async (req, res) => {
   try {
     const entries = await searchEntries(userId, 30);
     const insight = await generateWeeklyInsight(entries, goal || null, profileSummary || null);
-    // Store the insight back as a memory for future Coach/nudge context
-    const today = new Date().toDateString();
-    addMemory(`[Weekly insight for ${today}] ${insight}`, userId, 'insight').catch(err => {
-      console.warn('[weekly] Could not store insight back:', err.message);
-    });
     res.json({ insight });
   } catch (err) {
     console.error('weekly insight error:', err.message);

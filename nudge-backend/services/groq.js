@@ -24,9 +24,12 @@ Rules:
   • Score 80–100 (Peak): be genuinely upbeat and energising — this is a great day to move.
   If no score is given, fall back to HR/HRV signals if present.`;
 
-const COACH_SYSTEM_PROMPT = `You are a knowledgeable, warm personal movement coach with access to this person's complete movement history.
+const COACH_SYSTEM_PROMPT = `You are a knowledgeable, warm personal movement coach with access to this person's movement history.
 Rules:
 - Answer directly and specifically, referencing their actual data wherever relevant
+- Each dated check-in includes a date — prefer recent dated check-ins over older or undated notes
+- Do not claim patterns about "the last 7 days" (or similar windows) unless the dated check-ins actually cover that span
+- If recent data is sparse or inconsistent, say so honestly rather than forcing a neat narrative
 - Be conversational and insightful — like a thoughtful friend who genuinely knows their patterns
 - Keep answers to 3–5 sentences, concise but meaningful
 - If you spot a real pattern (specific days, activity types, streaks, gaps), name it explicitly
@@ -51,6 +54,21 @@ function parseDateFromEntry(entry) {
  */
 function sortEntriesByDate(entries) {
   return [...entries].sort((a, b) => parseDateFromEntry(b) - parseDateFromEntry(a));
+}
+
+/**
+ * Prefer entries within the last maxDays when enough dated ones exist;
+ * otherwise fall back to the full sorted list.
+ */
+function preferRecentWindow(sortedNewestFirst, maxDays = 14) {
+  const cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - maxDays);
+  const inWindow = sortedNewestFirst.filter(e => {
+    const d = parseDateFromEntry(e);
+    return d.getTime() > 0 && d >= cutoff;
+  });
+  return inWindow.length >= 3 ? inWindow : sortedNewestFirst;
 }
 
 /**
@@ -114,19 +132,30 @@ export async function generateNudge(entries, userName = 'friend', recoveryContex
 
 /**
  * Answer a free-form question from the user using their movement history as context.
- * @param {string[]} entries  Relevant entries from Supermemory (semantic search results)
- * @param {string}   question The user's question
+ * @param {string[]} recentEntries  Dated check-ins (primary, chronological)
+ * @param {string}   question       The user's question
  * @param {Array<{role: string, content: string}>} history  Recent conversation turns (oldest first)
- * @returns {string}          The coach's answer
+ * @param {string[]} semanticHits   Extra entry hits related to the question
+ * @returns {string}                The coach's answer
  */
-export async function generateCoachAnswer(entries, question, history = [], goal = null, profileSummary = null, profileMems = []) {
-  const entriesText = entries.length > 0
-    ? entries.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n')
-    : 'No movement history stored yet.';
+export async function generateCoachAnswer(recentEntries, question, history = [], goal = null, profileSummary = null, profileMems = [], semanticHits = []) {
+  const today = new Date().toDateString();
+  const sortedRecent = preferRecentWindow(sortEntriesByDate(recentEntries), 14);
+
+  const recentSet = new Set(sortedRecent);
+  const semanticExtra = semanticHits.filter(e => !recentSet.has(e)).slice(0, 5);
+
+  const recentText = sortedRecent.length > 0
+    ? sortedRecent.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n')
+    : 'No recent dated check-ins stored yet.';
 
   const profileLine = profileSummary ? `\n${profileSummary}` : '';
 
-  let systemWithContext = `${COACH_SYSTEM_PROMPT}${goalLine(goal)}${profileLine}\n\nMovement history and context (most relevant to the question):\n${entriesText}`;
+  let systemWithContext = `${COACH_SYSTEM_PROMPT}${goalLine(goal)}${profileLine}\n\nToday's date: ${today}\n\nRecent dated check-ins (newest first — prefer these):\n${recentText}`;
+
+  if (semanticExtra.length > 0) {
+    systemWithContext += `\n\nAdditional check-ins related to the question:\n${semanticExtra.map((e, i) => `Related ${i + 1}: ${e}`).join('\n')}`;
+  }
 
   if (profileMems.length > 0) {
     systemWithContext += `\n\nPersistent user profile (from memory):\n${profileMems.join('\n')}`;
@@ -159,10 +188,12 @@ Write EXACTLY ONE sentence (under 18 words) that:
 
 const WEEKLY_SYSTEM_PROMPT = `You are a personal movement coach giving a weekly pattern analysis.
 Write exactly 3 sentences:
-1. Consistency summary — use real numbers from the data (e.g. "X of the last Y days")
+1. Consistency summary — use real numbers from the dated check-ins (e.g. "X of the last Y days")
 2. Strongest pattern — name the specific day, activity type, or streak you see in the data
 3. One forward-looking observation for the coming week that feels personally relevant
 Rules:
+- Each entry includes a date — ground "this week" / "last X days" claims in those dates relative to today's date
+- Only count days that appear in the provided entries; if data is sparse or uneven, say so
 - Reference actual data points, not vague generalities
 - Conversational, warm tone — like a coach who genuinely reviewed the data
 - No filler phrases, no generic health advice`;
@@ -204,7 +235,7 @@ export async function generateReaction(entries, didMove, activities, goal = null
 
 /**
  * Generate a 3-sentence weekly pattern insight.
- * @param {string[]} entries  Up to 30 recent entries
+ * @param {string[]} entries  Check-in entries from Supermemory (any order)
  * @returns {string}  The weekly insight text
  */
 export async function generateWeeklyInsight(entries, goal = null, profileSummary = null) {
@@ -212,10 +243,12 @@ export async function generateWeeklyInsight(entries, goal = null, profileSummary
     return "You haven't logged any entries yet — start checking in each evening and I'll have a real pattern analysis for you next week.";
   }
 
-  const context = entries.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n');
+  const sorted = preferRecentWindow(sortEntriesByDate(entries), 14);
+  const today = new Date().toDateString();
+  const context = sorted.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n');
   const goalCtx    = goal           ? `\nThis person's fitness goal: ${goalLabel(goal)}.` : '';
   const profileCtx = profileSummary ? `\n${profileSummary}` : '';
-  const userPrompt = `Here are this person's recent movement entries (newest first):\n\n${context}${goalCtx}${profileCtx}\n\nWrite their 3-sentence weekly pattern analysis.`;
+  const userPrompt = `Today's date: ${today}\n\nHere are this person's recent movement check-ins, sorted newest first:\n\n${context}${goalCtx}${profileCtx}\n\nWrite their 3-sentence weekly pattern analysis.`;
 
   const completion = await client().chat.completions.create({
     model: 'llama-3.1-8b-instant',

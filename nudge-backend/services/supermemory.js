@@ -66,9 +66,9 @@ export async function searchMemories(userId, limit = 14, query = 'movement exerc
     .filter(Boolean);
 }
 
-/** Backward compat alias — searches all memory types */
+/** Search only dated check-in entries (excludes insights, convos, profile, etc.) */
 export const searchEntries = (userId, limit = 14, query = 'movement exercise activity rest day') =>
-  searchMemories(userId, limit, query);
+  searchMemories(userId, limit, query, 'entry');
 
 /**
  * Delete all Supermemory memories for a user (all types).
