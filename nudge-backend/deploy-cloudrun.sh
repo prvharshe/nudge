@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:-}"
-REGION="${REGION:-us-central1}"
+REGION="${REGION:-asia-south1}"
 SERVICE_NAME="${SERVICE_NAME:-nudge-backend}"
 IMAGE="${IMAGE:-gcr.io/${PROJECT_ID}/${SERVICE_NAME}}"
 SUPERMEMORY_API_KEY="${SUPERMEMORY_API_KEY:-}"

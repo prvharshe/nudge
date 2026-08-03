@@ -497,7 +497,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Backend URL (Debug)")
                 } footer: {
-                    Text("Leave empty to use the Railway production server. This section is only visible in Debug builds.")
+                    Text("Leave empty to use the Cloud Run production server. This override is Debug-only and ignored in Release builds.")
                 }
                 #endif
 

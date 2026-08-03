@@ -335,7 +335,9 @@ struct CoachView: View {
             } catch {
                 await MainActor.run {
                     isLoading = false
-                    withAnimation { errorMessage = "Couldn't reach the coach. Check your connection." }
+                    let message = (error as? LocalizedError)?.errorDescription
+                        ?? "Couldn't reach the coach. Check your connection."
+                    withAnimation { errorMessage = message }
                     // Clear the error after 4 seconds
                     Task {
                         try? await Task.sleep(for: .seconds(4))
