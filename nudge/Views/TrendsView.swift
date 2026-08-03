@@ -26,6 +26,7 @@ struct TrendsView: View {
                         if isLoading {
                             ProgressView("Loading health data…")
                                 .padding(.top, 60)
+                                .frame(maxWidth: .infinity)
                         } else {
                             overviewCard
                             calendarCard
@@ -40,7 +41,9 @@ struct TrendsView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
                     .padding(.bottom, 40)
+                    .frame(maxWidth: .infinity)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(AmbientBackground())
                 .navigationTitle("Trends")
                 .navigationBarTitleDisplayMode(.large)
