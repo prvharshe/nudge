@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js"
+    "dev": "node --watch index.js",
+    "test:smoke": "node scripts/smoke-coach.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -57,7 +57,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
 
 There are no external Swift dependencies — it's a plain Xcode project.
 
-**Pointing the app at your backend:** the app defaults to `http://localhost:3000`. To use a physical device, set the `nudge.backendURL` UserDefaults key (via the in-app Settings screen) to your machine's LAN IP or a deployed backend URL.
+**Pointing the app at your backend:** Release builds use the Cloud Run production URL (`https://nudge-backend-40994690021.asia-south1.run.app`). In Debug builds, set `nudge.backendURL` via Settings to point at `http://localhost:3000`, a LAN IP, or another deployed backend.
 
 ## API overview
 

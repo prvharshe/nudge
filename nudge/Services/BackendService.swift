@@ -1,8 +1,35 @@
 import Foundation
 
+enum BackendError: LocalizedError {
+    case unreachable
+    case serverUnavailable(status: Int)
+    case badResponse(String?)
+
+    var errorDescription: String? {
+        switch self {
+        case .unreachable:
+            return "Couldn't reach the coach. Check your connection."
+        case .serverUnavailable:
+            return "Coach is temporarily unavailable. Try again in a moment."
+        case .badResponse(let message):
+            return message ?? "Coach couldn't answer that. Try again."
+        }
+    }
+}
+
 enum BackendService {
+    private static let productionURL = "https://nudge-backend-40994690021.asia-south1.run.app"
+
+    /// Production Cloud Run URL. Debug builds may override via Settings → Backend URL.
     private static var baseURL: String {
-        UserDefaults.standard.string(forKey: "nudge.backendURL") ?? "https://nudge-backend-40994690021.asia-south1.run.app"
+        #if DEBUG
+        if let override = UserDefaults.standard.string(forKey: "nudge.backendURL")?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !override.isEmpty {
+            return override.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        }
+        #endif
+        return productionURL
     }
 
     // MARK: - Sync entry to Supermemory via backend
@@ -113,15 +140,38 @@ enum BackendService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        request.timeoutInterval = 20
+        // Cold starts + Supermemory search + Groq can exceed 20s
+        request.timeoutInterval = 45
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw URLError(.badServerResponse)
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw BackendError.unreachable
+            }
+            guard http.statusCode == 200 else {
+                let serverMsg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
+                    .flatMap { $0["error"] as? String }
+                if (500...599).contains(http.statusCode) {
+                    throw BackendError.serverUnavailable(status: http.statusCode)
+                }
+                throw BackendError.badResponse(serverMsg)
+            }
+
+            let json = try JSONDecoder().decode(CoachResponse.self, from: data)
+            return json.answer
+        } catch let error as BackendError {
+            throw error
+        } catch let error as URLError {
+            switch error.code {
+            case .timedOut, .notConnectedToInternet, .networkConnectionLost,
+                 .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+                throw BackendError.unreachable
+            default:
+                throw BackendError.serverUnavailable(status: -1)
+            }
+        } catch is DecodingError {
+            throw BackendError.badResponse(nil)
         }
-
-        let json = try JSONDecoder().decode(CoachResponse.self, from: data)
-        return json.answer
     }
 
     // MARK: - Post-log one-sentence reaction
