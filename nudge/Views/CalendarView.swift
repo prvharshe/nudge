@@ -50,7 +50,8 @@ struct CalendarView: View {
             .refreshable {
                 loadWeeklySteps()
                 loadMissedDays()
-                loadOrGenerateInsight()
+                // Force regenerate so pull-to-refresh does not keep a stale same-week cache
+                generateInsight()
             }
             .navigationTitle("History")
             .navigationBarTitleDisplayMode(.large)
