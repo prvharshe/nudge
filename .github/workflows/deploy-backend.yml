@@ -1,0 +1,83 @@
+name: Deploy backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'nudge-backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PROJECT_ID: msaas-438006
+  REGION: asia-south1
+  SERVICE_NAME: nudge-backend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nudge-backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run
+        env:
+          SUPERMEMORY_API_KEY: ${{ secrets.SUPERMEMORY_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          DEPLOY_ARGS=(
+            "${SERVICE_NAME}"
+            --source .
+            --project "${PROJECT_ID}"
+            --region "${REGION}"
+            --platform managed
+            --allow-unauthenticated
+            --port 8080
+            --memory 512Mi
+            --cpu 1
+            --concurrency 80
+            --timeout 60
+            --min-instances 0
+            --max-instances 3
+            --quiet
+          )
+
+          # Prefer GitHub secrets when both are set; otherwise keep existing Cloud Run env.
+          if [[ -n "${SUPERMEMORY_API_KEY:-}" && -n "${GROQ_API_KEY:-}" ]]; then
+            DEPLOY_ARGS+=(--set-env-vars "SUPERMEMORY_API_KEY=${SUPERMEMORY_API_KEY},GROQ_API_KEY=${GROQ_API_KEY},NODE_ENV=production")
+          else
+            echo "API key secrets not both set — deploying code only and preserving existing Cloud Run env vars."
+            DEPLOY_ARGS+=(--update-env-vars "NODE_ENV=production")
+          fi
+
+          gcloud run deploy "${DEPLOY_ARGS[@]}"
+
+      - name: Smoke check
+        run: |
+          URL="$(gcloud run services describe "${SERVICE_NAME}" \
+            --project "${PROJECT_ID}" \
+            --region "${REGION}" \
+            --format='value(status.url)')"
+          curl -fsS "${URL}/api/health"
+          echo
