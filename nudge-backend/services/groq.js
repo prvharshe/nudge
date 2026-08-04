@@ -24,6 +24,10 @@ Rules:
   • Score 80–100 (Peak): be genuinely upbeat and energising — this is a great day to move.
   If no score is given, fall back to HR/HRV signals if present.`;
 
+// Below llama-3.1-8b-instant's 8192 max completion tokens — leave headroom
+// for prompt size under free-tier TPM (~6K tokens/min).
+const COACH_MAX_TOKENS = 4096;
+
 const COACH_SYSTEM_PROMPT = `You are a knowledgeable, warm personal movement coach with access to this person's movement history.
 Rules:
 - Answer directly and specifically, referencing their actual data wherever relevant
@@ -31,7 +35,8 @@ Rules:
 - Do not claim patterns about "the last 7 days" (or similar windows) unless the dated check-ins actually cover that span
 - If recent data is sparse or inconsistent, say so honestly rather than forcing a neat narrative
 - Be conversational and insightful — like a thoughtful friend who genuinely knows their patterns
-- Keep answers to 3–5 sentences, concise but meaningful
+- Keep answers concise but complete — prefer 3–5 sentences; short bullets are fine when they ask for a plan
+- Always finish your final sentence; never trail off mid-thought. If space is tight, wrap up the current point instead of starting a new one
 - If you spot a real pattern (specific days, activity types, streaks, gaps), name it explicitly
 - If there's not enough history to answer well, say so honestly and tell them what to log
 - Never be preachy or lecture about health — focus on patterns, observations, and encouragement
@@ -170,13 +175,47 @@ export async function generateCoachAnswer(recentEntries, question, history = [],
   const completion = await client().chat.completions.create({
     model: 'llama-3.1-8b-instant',
     messages,
-    max_tokens: 200,
+    max_tokens: COACH_MAX_TOKENS,
     temperature: 0.75,
   });
 
-  const message = completion.choices[0]?.message?.content?.trim();
+  let message = completion.choices[0]?.message?.content?.trim();
   if (!message) throw new Error('Groq returned empty coach answer');
+
+  // If Groq hit the output cap mid-reply, continue once and stitch the parts together.
+  if (completion.choices[0]?.finish_reason === 'length') {
+    const continuation = await client().chat.completions.create({
+      model: 'llama-3.1-8b-instant',
+      messages: [
+        ...messages,
+        { role: 'assistant', content: message },
+        { role: 'user', content: 'Continue exactly where you left off. Do not repeat prior text.' },
+      ],
+      max_tokens: COACH_MAX_TOKENS,
+      temperature: 0.75,
+    });
+
+    const remainder = continuation.choices[0]?.message?.content?.trim();
+    if (remainder) {
+      message = stitchContinuation(message, remainder);
+    }
+  }
+
   return message;
+}
+
+/** Join a truncated reply with its continuation, dropping a short overlapping prefix if present. */
+function stitchContinuation(partial, remainder) {
+  const overlapWindow = Math.min(80, Math.floor(partial.length / 2), remainder.length);
+  for (let n = overlapWindow; n >= 12; n--) {
+    const suffix = partial.slice(-n);
+    if (remainder.startsWith(suffix)) {
+      return (partial + remainder.slice(n)).replace(/\s+/g, ' ').trim();
+    }
+  }
+
+  const needsSpace = !/\s$/.test(partial) && !/^\s/.test(remainder) && !/^[.,;:!?)\]…]/.test(remainder);
+  return (partial + (needsSpace ? ' ' : '') + remainder).replace(/\s+/g, ' ').trim();
 }
 
 const REACTION_SYSTEM_PROMPT = `You are a personal movement coach reacting to a just-logged entry.
