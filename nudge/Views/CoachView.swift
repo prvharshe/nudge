@@ -26,7 +26,12 @@ struct CoachView: View {
     @State private var inputText = ""
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
+    @State private var keepToast: String? = nil
+    @State private var showKeepsSheet = false
+    @State private var highlightedKeepID: UUID? = nil
     @FocusState private var inputFocused: Bool
+
+    @State private var keepStore = CoachKeepStore.shared
 
     private let storageKey = "nudge.coachMessages"
     private let minimumEntries = 5
@@ -65,13 +70,42 @@ struct CoachView: View {
                             .transition(.opacity)
                     }
 
+                    if !keepStore.isEmpty {
+                        keepsChipStrip
+                    }
+
                     Divider()
                     inputBar
                 }
                 .background(AmbientBackground())
+                .overlay(alignment: .bottom) {
+                    if let keepToast {
+                        Text(keepToast)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Capsule().fill(Color.black.opacity(0.75)))
+                            .padding(.bottom, 88)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
                 .navigationTitle("Coach")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        if !keepStore.isEmpty {
+                            Button {
+                                highlightedKeepID = nil
+                                showKeepsSheet = true
+                            } label: {
+                                Image(systemName: "bookmark.fill")
+                                    .foregroundStyle(Theme.brandCoral)
+                            }
+                            .accessibilityLabel("Your keeps")
+                        }
+                    }
+
                     if !messages.isEmpty {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button("Clear") { clearMessages() }
@@ -79,6 +113,16 @@ struct CoachView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                }
+                .sheet(isPresented: $showKeepsSheet) {
+                    CoachKeepsSheet(
+                        keepStore: keepStore,
+                        highlightedKeepID: highlightedKeepID,
+                        onAskFollowUp: { keep in
+                            inputText = "About this advice: \(keep.label) — "
+                            inputFocused = true
+                        }
+                    )
                 }
             } else {
                 lockedState
@@ -237,8 +281,13 @@ struct CoachView: View {
             ScrollView {
                 LazyVStack(spacing: 24) {
                     ForEach(messages) { msg in
-                        MessageRow(message: msg)
-                            .id(msg.id)
+                        MessageRow(
+                            message: msg,
+                            isKept: keepStore.isKept(id: msg.id),
+                            onKeep: { toggleKeep(for: msg) },
+                            onCopy: { copyAnswer(msg.answer) }
+                        )
+                        .id(msg.id)
                     }
                     if isLoading {
                         TypingIndicatorView()
@@ -264,6 +313,41 @@ struct CoachView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Keeps chip strip
+
+    private var keepsChipStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(keepStore.keeps) { keep in
+                    Button {
+                        highlightedKeepID = keep.id
+                        showKeepsSheet = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "bookmark.fill")
+                                .font(.caption2)
+                            Text(keep.label)
+                                .font(.caption.weight(.medium))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .surfaceCard(cornerRadius: 14)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(Theme.brandBorderGradient, lineWidth: 1)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+        .background(.ultraThinMaterial)
     }
 
     // MARK: - Input bar
@@ -375,12 +459,60 @@ struct CoachView: View {
         withAnimation { messages = [] }
         UserDefaults.standard.removeObject(forKey: storageKey)
     }
+
+    // MARK: - Keeps
+
+    private func toggleKeep(for message: CoachMessage) {
+        if keepStore.isKept(id: message.id) {
+            keepStore.unkeep(id: message.id)
+            showKeepToast("Removed from keeps")
+            Haptics.impact(.light)
+            return
+        }
+
+        guard keepStore.keep(from: message) != nil else { return }
+
+        Haptics.success()
+        showKeepToast("Kept — Coach will remember this")
+
+        let question = message.question
+        let answer = message.answer
+        let savedAt = Date.now
+        Task {
+            await BackendService.saveKeep(question: question, answer: answer, savedAt: savedAt)
+        }
+    }
+
+    private func copyAnswer(_ answer: String) {
+        UIPasteboard.general.string = answer
+        Haptics.impact(.light)
+        showKeepToast("Copied")
+    }
+
+    private func showKeepToast(_ message: String) {
+        withAnimation {
+            keepToast = message
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            await MainActor.run {
+                withAnimation {
+                    if keepToast == message {
+                        keepToast = nil
+                    }
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Message Row
 
 struct MessageRow: View {
     let message: CoachMessage
+    let isKept: Bool
+    let onKeep: () -> Void
+    let onCopy: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -405,6 +537,35 @@ struct MessageRow: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
                     .surfaceCard(cornerRadius: 18)
+                    .overlay(alignment: .topTrailing) {
+                        if isKept {
+                            Image(systemName: "bookmark.fill")
+                                .font(.caption2)
+                                .foregroundStyle(Theme.brandGradient)
+                                .padding(8)
+                        }
+                    }
+                    .contextMenu {
+                        if isKept {
+                            Button(role: .destructive) {
+                                onKeep()
+                            } label: {
+                                Label("Remove keep", systemImage: "bookmark.slash")
+                            }
+                        } else {
+                            Button {
+                                onKeep()
+                            } label: {
+                                Label("Keep this", systemImage: "bookmark")
+                            }
+                        }
+
+                        Button {
+                            onCopy()
+                        } label: {
+                            Label("Copy", systemImage: "doc.on.doc")
+                        }
+                    }
 
                 Spacer(minLength: 0)
             }

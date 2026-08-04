@@ -41,6 +41,7 @@ Rules:
 - If there's not enough history to answer well, say so honestly and tell them what to log
 - Never be preachy or lecture about health — focus on patterns, observations, and encouragement
 - Never use filler phrases like "great job" or "keep it up"
+- When advice the user explicitly chose to keep is provided in context, honour it naturally — reference it when relevant and never contradict it
 - IMPORTANT: If the person sends a short acknowledgment like "thanks", "ok", "alright", "got it", "cool", or similar closing remarks — do NOT repeat or summarise what was already discussed. Instead, respond with a single genuinely motivating sentence that highlights one concrete positive thing you can see in their data (a streak, a favourite activity, a recent win). Keep it fresh, specific, and forward-looking.`;
 
 /**
@@ -143,7 +144,7 @@ export async function generateNudge(entries, userName = 'friend', recoveryContex
  * @param {string[]} semanticHits   Extra entry hits related to the question
  * @returns {string}                The coach's answer
  */
-export async function generateCoachAnswer(recentEntries, question, history = [], goal = null, profileSummary = null, profileMems = [], semanticHits = []) {
+export async function generateCoachAnswer(recentEntries, question, history = [], goal = null, profileSummary = null, profileMems = [], semanticHits = [], keptInsights = []) {
   const today = new Date().toDateString();
   const sortedRecent = preferRecentWindow(sortEntriesByDate(recentEntries), 14);
 
@@ -164,6 +165,10 @@ export async function generateCoachAnswer(recentEntries, question, history = [],
 
   if (profileMems.length > 0) {
     systemWithContext += `\n\nPersistent user profile (from memory):\n${profileMems.join('\n')}`;
+  }
+
+  if (keptInsights.length > 0) {
+    systemWithContext += `\n\nAdvice the user explicitly chose to keep (honour these when relevant):\n${keptInsights.map((k, i) => `Keep ${i + 1}: ${k}`).join('\n')}`;
   }
 
   const messages = [
