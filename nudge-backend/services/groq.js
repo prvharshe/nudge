@@ -24,8 +24,9 @@ Rules:
   • Score 80–100 (Peak): be genuinely upbeat and energising — this is a great day to move.
   If no score is given, fall back to HR/HRV signals if present.`;
 
-// llama-3.1-8b-instant max completion tokens per reply (Groq model limit).
-const COACH_MAX_TOKENS = 8192;
+// Below llama-3.1-8b-instant's 8192 max completion tokens — leave headroom
+// for prompt size under free-tier TPM (~6K tokens/min).
+const COACH_MAX_TOKENS = 4096;
 
 const COACH_SYSTEM_PROMPT = `You are a knowledgeable, warm personal movement coach with access to this person's movement history.
 Rules:
