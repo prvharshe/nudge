@@ -12,7 +12,8 @@ const router = express.Router();
  *   1. Recent dated check-ins (type: entry) — chronological primary context
  *   2. Limited semantic entry hits tuned to the question
  *   3. Profile memory (always)
- * Insights/convos are excluded so old summaries don't drown recent check-ins.
+ *   4. User-kept advice (type: insight) — high-signal anchors the user chose to save
+ * Auto-summarized convos are excluded so old summaries don't drown recent check-ins.
  */
 router.post('/', async (req, res) => {
   const { userId, question, history, goal, profileSummary } = req.body;
@@ -27,10 +28,11 @@ router.post('/', async (req, res) => {
 
   try {
     const q = question.trim();
-    const [recentEntries, semanticHits, profileMems] = await Promise.all([
+    const [recentEntries, semanticHits, profileMems, keptInsights] = await Promise.all([
       searchMemories(userId, 14, 'movement exercise activity rest day check-in', 'entry'),
       searchMemories(userId, 8, q, 'entry'),
       searchMemories(userId, 1, 'user profile fitness goals', 'profile'),
+      searchMemories(userId, 3, q, 'insight'),
     ]);
 
     const answer = await generateCoachAnswer(
@@ -40,7 +42,8 @@ router.post('/', async (req, res) => {
       goal || null,
       profileSummary || null,
       profileMems,
-      semanticHits
+      semanticHits,
+      keptInsights
     );
     res.json({ answer });
   } catch (err) {

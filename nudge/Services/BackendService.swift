@@ -258,6 +258,16 @@ enum BackendService {
         _ = try? await URLSession.shared.data(for: request)
     }
 
+    // MARK: - Save a kept coach reply to Supermemory
+
+    /// Fire-and-forget — stores user-anchored advice as an `insight` memory.
+    static func saveKeep(question: String, answer: String, savedAt: Date) async {
+        let formatter = ISO8601DateFormatter()
+        let date = formatter.string(from: savedAt)
+        let content = "[Kept coach advice on \(date)] Q: \(question) A: \(answer)"
+        await storeMemory(type: .insight, content: content)
+    }
+
     // MARK: - Save coach conversation summary
 
     /// Sends conversation turns to backend; Groq summarises and stores in Supermemory.
