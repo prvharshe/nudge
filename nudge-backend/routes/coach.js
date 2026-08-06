@@ -4,6 +4,16 @@ import { generateCoachAnswer } from '../services/groq.js';
 
 const router = express.Router();
 
+/** Supermemory search that degrades gracefully instead of failing the whole coach call. */
+async function safeSearch(userId, limit, query, type) {
+  try {
+    return await searchMemories(userId, limit, query, type);
+  } catch (err) {
+    console.warn(`coach memory search failed (${type ?? 'all'}):`, err.message);
+    return [];
+  }
+}
+
 /**
  * POST /api/coach
  * Body: { userId, question, history?, goal?, profileSummary? }
@@ -29,10 +39,10 @@ router.post('/', async (req, res) => {
   try {
     const q = question.trim();
     const [recentEntries, semanticHits, profileMems, keptInsights] = await Promise.all([
-      searchMemories(userId, 14, 'movement exercise activity rest day check-in', 'entry'),
-      searchMemories(userId, 8, q, 'entry'),
-      searchMemories(userId, 1, 'user profile fitness goals', 'profile'),
-      searchMemories(userId, 3, q, 'insight'),
+      safeSearch(userId, 14, 'movement exercise activity rest day check-in', 'entry'),
+      safeSearch(userId, 8, q, 'entry'),
+      safeSearch(userId, 1, 'user profile fitness goals', 'profile'),
+      safeSearch(userId, 3, q, 'insight'),
     ]);
 
     const answer = await generateCoachAnswer(
@@ -48,6 +58,10 @@ router.post('/', async (req, res) => {
     res.json({ answer });
   } catch (err) {
     console.error('coach error:', err.message);
+    const isRateLimit = err?.status === 429 || /rate limit/i.test(err?.message ?? '');
+    if (isRateLimit) {
+      return res.status(503).json({ error: 'Coach is busy right now. Wait a moment and try again.' });
+    }
     res.status(500).json({ error: 'Failed to generate answer' });
   }
 });

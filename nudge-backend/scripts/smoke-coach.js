@@ -47,6 +47,20 @@ async function main() {
     `coach missing answer: ${coach.text.slice(0, 300)}`);
   console.log('✓ POST /api/coach returns answer');
   console.log(`  answer preview: ${coach.json.answer.slice(0, 120)}…`);
+
+  const activities = await request('/api/coach', {
+    method: 'POST',
+    body: {
+      userId: 'smoke-test-user',
+      question: 'What activities do I do most often?',
+      history: [],
+    },
+  });
+  assert(activities.status === 200, `activities coach expected 200, got ${activities.status}: ${activities.text.slice(0, 300)}`);
+  assert(typeof activities.json?.answer === 'string' && activities.json.answer.length > 0,
+    `activities coach missing answer: ${activities.text.slice(0, 300)}`);
+  console.log('✓ POST /api/coach handles activity-frequency question');
+
   console.log('All smoke checks passed.');
 }
 

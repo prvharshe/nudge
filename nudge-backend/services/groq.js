@@ -24,9 +24,30 @@ Rules:
   • Score 80–100 (Peak): be genuinely upbeat and energising — this is a great day to move.
   If no score is given, fall back to HR/HRV signals if present.`;
 
-// Below llama-3.1-8b-instant's 8192 max completion tokens — leave headroom
-// for prompt size under free-tier TPM (~6K tokens/min).
-const COACH_MAX_TOKENS = 4096;
+// Enough for 3–5 sentences plus short bullets; keeps Groq TPM usage lower than 4096.
+const COACH_MAX_TOKENS = 1024;
+
+/** Cap individual memory chunks so prompts stay bounded for users with long keeps/history. */
+function truncateChunk(text, max = 700) {
+  if (!text || text.length <= max) return text;
+  return `${text.slice(0, max).trim()}…`;
+}
+
+async function groqChatWithRetry(params, retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await client().chat.completions.create(params);
+    } catch (err) {
+      const isRateLimit = err?.status === 429 || /rate limit/i.test(err?.message ?? '');
+      if (isRateLimit && attempt < retries) {
+        await new Promise(resolve => setTimeout(resolve, 1200 * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('Groq chat failed after retries');
+}
 
 const COACH_SYSTEM_PROMPT = `You are a knowledgeable, warm personal movement coach with access to this person's movement history.
 Rules:
@@ -146,10 +167,10 @@ export async function generateNudge(entries, userName = 'friend', recoveryContex
  */
 export async function generateCoachAnswer(recentEntries, question, history = [], goal = null, profileSummary = null, profileMems = [], semanticHits = [], keptInsights = []) {
   const today = new Date().toDateString();
-  const sortedRecent = preferRecentWindow(sortEntriesByDate(recentEntries), 14);
+  const sortedRecent = preferRecentWindow(sortEntriesByDate(recentEntries.map(truncateChunk)), 14);
 
   const recentSet = new Set(sortedRecent);
-  const semanticExtra = semanticHits.filter(e => !recentSet.has(e)).slice(0, 5);
+  const semanticExtra = semanticHits.map(truncateChunk).filter(e => !recentSet.has(e)).slice(0, 5);
 
   const recentText = sortedRecent.length > 0
     ? sortedRecent.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n')
@@ -164,11 +185,11 @@ export async function generateCoachAnswer(recentEntries, question, history = [],
   }
 
   if (profileMems.length > 0) {
-    systemWithContext += `\n\nPersistent user profile (from memory):\n${profileMems.join('\n')}`;
+    systemWithContext += `\n\nPersistent user profile (from memory):\n${profileMems.map(truncateChunk).join('\n')}`;
   }
 
   if (keptInsights.length > 0) {
-    systemWithContext += `\n\nAdvice the user explicitly chose to keep (honour these when relevant):\n${keptInsights.map((k, i) => `Keep ${i + 1}: ${k}`).join('\n')}`;
+    systemWithContext += `\n\nAdvice the user explicitly chose to keep (honour these when relevant):\n${keptInsights.map((k, i) => `Keep ${i + 1}: ${truncateChunk(k)}`).join('\n')}`;
   }
 
   const messages = [
@@ -177,7 +198,7 @@ export async function generateCoachAnswer(recentEntries, question, history = [],
     { role: 'user', content: question },
   ];
 
-  const completion = await client().chat.completions.create({
+  const completion = await groqChatWithRetry({
     model: 'llama-3.1-8b-instant',
     messages,
     max_tokens: COACH_MAX_TOKENS,
@@ -189,7 +210,7 @@ export async function generateCoachAnswer(recentEntries, question, history = [],
 
   // If Groq hit the output cap mid-reply, continue once and stitch the parts together.
   if (completion.choices[0]?.finish_reason === 'length') {
-    const continuation = await client().chat.completions.create({
+    const continuation = await groqChatWithRetry({
       model: 'llama-3.1-8b-instant',
       messages: [
         ...messages,
