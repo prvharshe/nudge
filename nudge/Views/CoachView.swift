@@ -241,8 +241,7 @@ struct CoachView: View {
                 VStack(spacing: 10) {
                     ForEach(suggestions, id: \.self) { suggestion in
                         Button {
-                            inputText = suggestion
-                            sendMessage()
+                            sendMessage(question: suggestion)
                         } label: {
                             HStack {
                                 Text(suggestion)
@@ -262,16 +261,16 @@ struct CoachView: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .disabled(isLoading)
                     }
                 }
                 .padding(.horizontal, 24)
 
-                Spacer(minLength: 40)
+                Spacer(minLength: keepStore.isEmpty ? 40 : 100)
             }
         }
         // Swipe down on the empty state to dismiss keyboard
         .scrollDismissesKeyboard(.interactively)
-        .onTapGesture { inputFocused = false }
     }
 
     // MARK: - Message list
@@ -383,8 +382,8 @@ struct CoachView: View {
 
     // MARK: - Send
 
-    private func sendMessage() {
-        let question = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func sendMessage(question override: String? = nil) {
+        let question = (override ?? inputText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, !isLoading else { return }
 
         inputText = ""
@@ -419,6 +418,7 @@ struct CoachView: View {
             } catch {
                 await MainActor.run {
                     isLoading = false
+                    inputText = question
                     let message = (error as? LocalizedError)?.errorDescription
                         ?? "Couldn't reach the coach. Check your connection."
                     withAnimation { errorMessage = message }

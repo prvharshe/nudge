@@ -151,6 +151,9 @@ enum BackendService {
             guard http.statusCode == 200 else {
                 let serverMsg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
                     .flatMap { $0["error"] as? String }
+                if http.statusCode == 503, let serverMsg {
+                    throw BackendError.badResponse(serverMsg)
+                }
                 if (500...599).contains(http.statusCode) {
                     throw BackendError.serverUnavailable(status: http.statusCode)
                 }
