@@ -104,6 +104,7 @@ struct CoachKeepsSheet: View {
                 }
                 .font(.caption.weight(.medium))
                 .foregroundStyle(Theme.brandCoral)
+                .buttonStyle(.borderless)
 
                 Spacer()
 
@@ -115,6 +116,7 @@ struct CoachKeepsSheet: View {
                         .font(.caption.weight(.medium))
                 }
                 .foregroundStyle(Theme.brandCoral)
+                .buttonStyle(.borderless)
             }
         }
         .padding(16)
