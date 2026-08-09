@@ -6,7 +6,7 @@ A personal movement coach for iOS. Nudge checks in with you every evening ("did 
 
 1. **9 PM check-in** — a local notification asks whether you moved today. You answer YES/NO, tag activities (walk, run, tired, busy, or custom), and optionally add a note.
 2. **Entries are remembered** — each entry is stored locally with SwiftData and synced to the backend, which saves it to [Supermemory](https://supermemory.ai) tagged by your user ID.
-3. **10 AM morning nudge** — the backend pulls your recent entries from Supermemory and asks Groq (`llama-3.1-8b-instant`) for a two-sentence personalized message.
+3. **10 AM morning nudge** — the backend pulls your recent entries from Supermemory and asks Groq (`openai/gpt-oss-20b`) for a two-sentence personalized message.
 
 ## Repository layout
 
@@ -43,6 +43,7 @@ Create `nudge-backend/.env` with:
 SUPERMEMORY_API_KEY=sk-...
 GROQ_API_KEY=gsk_...
 PORT=3000            # optional, defaults to 3000
+# GROQ_CHAT_MODEL=openai/gpt-oss-20b   # optional; default is GPT OSS 20B
 ```
 
 ### iOS app

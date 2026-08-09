@@ -1,9 +1,41 @@
 import Groq from 'groq-sdk';
 
+/** Groq production model ID for chat-completion workloads (nudge, coach, etc.). */
+export const DEFAULT_GROQ_CHAT_MODEL = 'openai/gpt-oss-20b';
+
+/**
+ * Override with GROQ_CHAT_MODEL if needed; defaults to GPT OSS 20B.
+ * Vision OCR in reportParser.js uses a separate multimodal model and is unchanged.
+ */
+export const GROQ_CHAT_MODEL = process.env.GROQ_CHAT_MODEL || DEFAULT_GROQ_CHAT_MODEL;
+
+/**
+ * GPT-OSS spends completion budget on internal reasoning before visible content.
+ * Short legacy caps (e.g. 60–120) can return empty message.content; enforce a floor.
+ */
+const MIN_COMPLETION_TOKENS = 512;
+
 let _client = null;
 function client() {
   if (!_client) _client = new Groq({ apiKey: process.env.GROQ_API_KEY });
   return _client;
+}
+
+/**
+ * Apply GPT-OSS-compatible defaults while preserving caller max_tokens / temperature.
+ * - reasoning_effort: low — enough for short coaching text without blowing TPM
+ * - reasoning_format: hidden — keep message.content as the final answer only
+ * Exported for unit tests.
+ */
+export function buildGroqChatParams(params) {
+  const max_tokens = Math.max(params.max_tokens ?? 0, MIN_COMPLETION_TOKENS);
+  return {
+    reasoning_effort: 'low',
+    reasoning_format: 'hidden',
+    ...params,
+    model: params.model ?? GROQ_CHAT_MODEL,
+    max_tokens,
+  };
 }
 
 const NUDGE_SYSTEM_PROMPT = `You are a warm, encouraging personal movement coach.
@@ -34,9 +66,10 @@ function truncateChunk(text, max = 700) {
 }
 
 async function groqChatWithRetry(params, retries = 2) {
+  const request = buildGroqChatParams(params);
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      return await client().chat.completions.create(params);
+      return await client().chat.completions.create(request);
     } catch (err) {
       const isRateLimit = err?.status === 429 || /rate limit/i.test(err?.message ?? '');
       if (isRateLimit && attempt < retries) {
@@ -47,6 +80,11 @@ async function groqChatWithRetry(params, retries = 2) {
     }
   }
   throw new Error('Groq chat failed after retries');
+}
+
+/** Single-shot chat completion with shared model + GPT-OSS defaults. */
+async function groqChat(params) {
+  return client().chat.completions.create(buildGroqChatParams(params));
 }
 
 const COACH_SYSTEM_PROMPT = `You are a knowledgeable, warm personal movement coach with access to this person's movement history.
@@ -142,8 +180,7 @@ export async function generateNudge(entries, userName = 'friend', recoveryContex
 
   const userPrompt = `Today's date: ${today}${recoveryLine}${goalContext}${profileLine}\n\nYou are writing for someone named ${userName}. Here are their recent movement entries, sorted newest first:\n\n${context}\n\nWrite their 2-sentence morning nudge for today. You may naturally use their name (${userName}) once if it feels right.`;
 
-  const completion = await client().chat.completions.create({
-    model: 'llama-3.1-8b-instant',
+  const completion = await groqChat({
     messages: [
       { role: 'system', content: NUDGE_SYSTEM_PROMPT },
       { role: 'user', content: userPrompt },
@@ -199,7 +236,6 @@ export async function generateCoachAnswer(recentEntries, question, history = [],
   ];
 
   const completion = await groqChatWithRetry({
-    model: 'llama-3.1-8b-instant',
     messages,
     max_tokens: COACH_MAX_TOKENS,
     temperature: 0.75,
@@ -211,7 +247,6 @@ export async function generateCoachAnswer(recentEntries, question, history = [],
   // If Groq hit the output cap mid-reply, continue once and stitch the parts together.
   if (completion.choices[0]?.finish_reason === 'length') {
     const continuation = await groqChatWithRetry({
-      model: 'llama-3.1-8b-instant',
       messages: [
         ...messages,
         { role: 'assistant', content: message },
@@ -283,8 +318,7 @@ export async function generateReaction(entries, didMove, activities, goal = null
   const profileCtx = profileSummary ? `\n${profileSummary}` : '';
   const userPrompt = `Recent history:\n${context}\n\n${todayDesc}${goalCtx}${profileCtx}\n\nWrite your one-sentence reaction.`;
 
-  const completion = await client().chat.completions.create({
-    model: 'llama-3.1-8b-instant',
+  const completion = await groqChat({
     messages: [
       { role: 'system', content: REACTION_SYSTEM_PROMPT },
       { role: 'user', content: userPrompt },
@@ -315,8 +349,7 @@ export async function generateWeeklyInsight(entries, goal = null, profileSummary
   const profileCtx = profileSummary ? `\n${profileSummary}` : '';
   const userPrompt = `Today's date: ${today}\n\nHere are this person's recent movement check-ins, sorted newest first:\n\n${context}${goalCtx}${profileCtx}\n\nWrite their 3-sentence weekly pattern analysis.`;
 
-  const completion = await client().chat.completions.create({
-    model: 'llama-3.1-8b-instant',
+  const completion = await groqChat({
     messages: [
       { role: 'system', content: WEEKLY_SYSTEM_PROMPT },
       { role: 'user', content: userPrompt },
@@ -341,8 +374,7 @@ export async function summarizeConversation(messages) {
     .map(m => `${m.role === 'user' ? 'User' : 'Coach'}: ${m.content}`)
     .join('\n');
 
-  const completion = await client().chat.completions.create({
-    model: 'llama-3.1-8b-instant',
+  const completion = await groqChat({
     messages: [
       {
         role: 'system',
@@ -394,8 +426,7 @@ export async function generateLearnInsight(metrics = {}, profileSummary = null) 
     ? `Today's data:\n${parts.join('\n')}\n\nWrite today's health insight.`
     : 'Write a general health insight about movement, recovery, or nutrition.';
 
-  const completion = await client().chat.completions.create({
-    model: 'llama-3.1-8b-instant',
+  const completion = await groqChat({
     messages: [
       { role: 'system', content: LEARN_SYSTEM_PROMPT },
       { role: 'user', content: userPrompt },
@@ -418,8 +449,7 @@ export async function generateLearnInsight(metrics = {}, profileSummary = null) 
  * @returns {object}
  */
 export async function extractBiomarkers(reportText) {
-  const completion = await client().chat.completions.create({
-    model: 'llama-3.1-8b-instant',
+  const completion = await groqChat({
     messages: [
       {
         role: 'system',
@@ -487,8 +517,7 @@ export async function generateReportInsights(biomarkers = {}, hkMetrics = {}, me
 
   const userPrompt = `Lab results:\n${bioLines || 'No structured biomarkers found — provide general wellness insights.'}\n\nFitness data:\n${hkLines.join('\n') || 'No fitness data available.'}${memSection}${profileSection}\n\nWrite 5-7 personalised insights.`;
 
-  const completion = await client().chat.completions.create({
-    model: 'llama-3.1-8b-instant',
+  const completion = await groqChat({
     messages: [
       { role: 'system', content: REPORT_INSIGHT_SYSTEM_PROMPT },
       { role: 'user', content: userPrompt },
