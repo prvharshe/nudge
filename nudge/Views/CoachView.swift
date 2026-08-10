@@ -530,10 +530,7 @@ struct MessageRow: View {
             HStack(alignment: .top, spacing: 10) {
                 GradientIconBadge(systemName: "brain.head.profile", size: 28)
 
-                Text(message.answer)
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
+                MarkdownContentView(text: message.answer)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
                     .surfaceCard(cornerRadius: 18)

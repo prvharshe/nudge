@@ -81,10 +81,7 @@ struct CoachKeepsSheet: View {
                 Text("Coach said")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
-                Text(keep.answer)
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
+                MarkdownContentView(text: keep.answer)
             } else {
                 Text(keep.answer)
                     .font(.subheadline)
