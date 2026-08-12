@@ -8,7 +8,8 @@
     "start": "node index.js",
     "dev": "node --watch index.js",
     "test": "node scripts/test-groq-model.js",
-    "test:smoke": "node scripts/smoke-coach.js"
+    "test:smoke": "node scripts/smoke-coach.js",
+    "test:sse": "node scripts/verify-sse.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

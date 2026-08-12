@@ -194,15 +194,17 @@ export async function generateNudge(entries, userName = 'friend', recoveryContex
   return message;
 }
 
-/**
- * Answer a free-form question from the user using their movement history as context.
- * @param {string[]} recentEntries  Dated check-ins (primary, chronological)
- * @param {string}   question       The user's question
- * @param {Array<{role: string, content: string}>} history  Recent conversation turns (oldest first)
- * @param {string[]} semanticHits   Extra entry hits related to the question
- * @returns {string}                The coach's answer
- */
-export async function generateCoachAnswer(recentEntries, question, history = [], goal = null, profileSummary = null, profileMems = [], semanticHits = [], keptInsights = []) {
+/** Build the chat messages array used by both blocking and streaming coach answers. */
+export function buildCoachMessages(
+  recentEntries,
+  question,
+  history = [],
+  goal = null,
+  profileSummary = null,
+  profileMems = [],
+  semanticHits = [],
+  keptInsights = []
+) {
   const today = new Date().toDateString();
   const sortedRecent = preferRecentWindow(sortEntriesByDate(recentEntries.map(truncateChunk)), 14);
 
@@ -229,11 +231,32 @@ export async function generateCoachAnswer(recentEntries, question, history = [],
     systemWithContext += `\n\nAdvice the user explicitly chose to keep (honour these when relevant):\n${keptInsights.map((k, i) => `Keep ${i + 1}: ${truncateChunk(k)}`).join('\n')}`;
   }
 
-  const messages = [
+  return [
     { role: 'system', content: systemWithContext },
     ...history,
     { role: 'user', content: question },
   ];
+}
+
+/**
+ * Answer a free-form question from the user using their movement history as context.
+ * @param {string[]} recentEntries  Dated check-ins (primary, chronological)
+ * @param {string}   question       The user's question
+ * @param {Array<{role: string, content: string}>} history  Recent conversation turns (oldest first)
+ * @param {string[]} semanticHits   Extra entry hits related to the question
+ * @returns {string}                The coach's answer
+ */
+export async function generateCoachAnswer(recentEntries, question, history = [], goal = null, profileSummary = null, profileMems = [], semanticHits = [], keptInsights = []) {
+  const messages = buildCoachMessages(
+    recentEntries,
+    question,
+    history,
+    goal,
+    profileSummary,
+    profileMems,
+    semanticHits,
+    keptInsights
+  );
 
   const completion = await groqChatWithRetry({
     messages,
@@ -254,7 +277,7 @@ export async function generateCoachAnswer(recentEntries, question, history = [],
       ],
       max_tokens: COACH_MAX_TOKENS,
       temperature: 0.75,
-    });
+      });
 
     const remainder = continuation.choices[0]?.message?.content?.trim();
     if (remainder) {
@@ -263,6 +286,53 @@ export async function generateCoachAnswer(recentEntries, question, history = [],
   }
 
   return message;
+}
+
+/**
+ * Stream a coach answer token-by-token via Groq chat.completions (stream: true).
+ * Yields plain text deltas from message.content (reasoning stays hidden).
+ * @returns {AsyncGenerator<string>}
+ */
+export async function* streamCoachAnswer(
+  recentEntries,
+  question,
+  history = [],
+  goal = null,
+  profileSummary = null,
+  profileMems = [],
+  semanticHits = [],
+  keptInsights = []
+) {
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY is not configured');
+  }
+
+  const messages = buildCoachMessages(
+    recentEntries,
+    question,
+    history,
+    goal,
+    profileSummary,
+    profileMems,
+    semanticHits,
+    keptInsights
+  );
+
+  const stream = await client().chat.completions.create(
+    buildGroqChatParams({
+      messages,
+      max_tokens: COACH_MAX_TOKENS,
+      temperature: 0.75,
+      stream: true,
+    })
+  );
+
+  for await (const chunk of stream) {
+    const delta = chunk.choices?.[0]?.delta?.content;
+    if (typeof delta === 'string' && delta.length > 0) {
+      yield delta;
+    }
+  }
 }
 
 /** Join a truncated reply with its continuation, dropping a short overlapping prefix if present. */
