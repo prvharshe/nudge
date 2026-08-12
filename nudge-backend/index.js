@@ -39,6 +39,8 @@ app.listen(PORT, () => {
   console.log(`  POST /api/entries   — log movement`);
   console.log(`  GET  /api/nudge     — get morning nudge`);
   console.log(`  POST /api/coach     — ask your coach`);
+  console.log(`  POST /api/coach/stream — coach answer as SSE`);
+  console.log(`  GET  /api/coach/sse-probe — timed SSE buffering probe`);
   console.log(`  POST /api/reaction  — post-log reaction`);
   console.log(`  POST /api/weekly    — weekly pattern insight`);
   console.log(`  POST /api/memories  — store typed memory`);
