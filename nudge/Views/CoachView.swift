@@ -1,21 +1,37 @@
 import SwiftUI
 import SwiftData
-import Combine
 
 // MARK: - Data model
 
-struct CoachMessage: Codable, Identifiable {
+struct CoachMessage: Codable, Identifiable, Equatable {
     let id: UUID
     let question: String
     let answer: String
     let date: Date
+    var sources: CoachContextSources?
 
-    init(question: String, answer: String) {
-        self.id = UUID()
+    init(
+        id: UUID = UUID(),
+        question: String,
+        answer: String,
+        date: Date = .now,
+        sources: CoachContextSources? = nil
+    ) {
+        self.id = id
         self.question = question
         self.answer = answer
-        self.date = Date.now
+        self.date = date
+        self.sources = sources
     }
+}
+
+private struct LiveCoachReply {
+    let id: UUID
+    let question: String
+    var answer: String
+    var sources: CoachContextSources?
+    var startedAt: Date
+    var hasToken: Bool
 }
 
 // MARK: - View
@@ -23,12 +39,14 @@ struct CoachMessage: Codable, Identifiable {
 struct CoachView: View {
     @Query private var allEntries: [Entry]
     @State private var messages: [CoachMessage] = []
+    @State private var live: LiveCoachReply? = nil
     @State private var inputText = ""
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var keepToast: String? = nil
     @State private var showKeepsSheet = false
     @State private var highlightedKeepID: UUID? = nil
+    @State private var showMentionPicker = false
     @FocusState private var inputFocused: Bool
 
     @State private var keepStore = CoachKeepStore.shared
@@ -54,7 +72,7 @@ struct CoachView: View {
         NavigationStack {
             if isUnlocked {
                 VStack(spacing: 0) {
-                    if messages.isEmpty && !isLoading {
+                    if messages.isEmpty && live == nil {
                         emptyState
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
@@ -75,6 +93,9 @@ struct CoachView: View {
                     }
 
                     Divider()
+                    if showMentionPicker && !mentionCandidates.isEmpty {
+                        mentionPicker
+                    }
                     inputBar
                 }
                 .background(AmbientBackground())
@@ -283,34 +304,60 @@ struct CoachView: View {
                         MessageRow(
                             message: msg,
                             isKept: keepStore.isKept(id: msg.id),
+                            showFollowUps: msg.id == messages.last?.id && live == nil,
                             onKeep: { toggleKeep(for: msg) },
-                            onCopy: { copyAnswer(msg.answer) }
+                            onCopy: { copyAnswer(msg.answer) },
+                            onFollowUp: { sendMessage(question: $0) }
                         )
                         .id(msg.id)
                     }
-                    if isLoading {
-                        TypingIndicatorView()
-                            .id("typing")
+                    if let live {
+                        liveReplyRow(live)
+                            .id("live")
                     }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
                 .padding(.bottom, 16)
             }
-            // Swipe down on the message list to dismiss keyboard → tab bar becomes reachable
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: messages.count) { _, _ in
                 withAnimation(.easeOut(duration: 0.3)) {
                     proxy.scrollTo(messages.last?.id, anchor: .bottom)
                 }
             }
-            .onChange(of: isLoading) { _, loading in
-                if loading {
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        proxy.scrollTo("typing", anchor: .bottom)
-                    }
+            .onChange(of: live?.hasToken) { _, _ in
+                withAnimation(.easeOut(duration: 0.3)) {
+                    proxy.scrollTo("live", anchor: .bottom)
                 }
             }
+            .onChange(of: live?.answer.count ?? 0) { _, count in
+                if count > 0, count.isMultiple(of: 40) {
+                    proxy.scrollTo("live", anchor: .bottom)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func liveReplyRow(_ live: LiveCoachReply) -> some View {
+        if live.hasToken {
+            MessageRow(
+                message: CoachMessage(
+                    id: live.id,
+                    question: live.question,
+                    answer: live.answer,
+                    sources: live.sources
+                ),
+                isKept: false,
+                isStreaming: true,
+                showFollowUps: false,
+                onKeep: {},
+                onCopy: { copyAnswer(live.answer) },
+                onFollowUp: { _ in }
+            )
+        } else {
+            CoachThinkingView(startedAt: live.startedAt, sources: live.sources)
         }
     }
 
@@ -349,17 +396,121 @@ struct CoachView: View {
         .background(.ultraThinMaterial)
     }
 
+    private var hasBloodReport: Bool {
+        UserDefaults.standard.string(forKey: "nudge.lastReportDate") != nil
+    }
+
+    private var mentionCandidates: [CoachMention] {
+        let query: String
+        if let at = inputText.lastIndex(of: "@") {
+            let after = String(inputText[inputText.index(after: at)...])
+            if after.contains(where: { $0.isWhitespace }) { return [] }
+            query = after.lowercased()
+        } else if showMentionPicker {
+            query = ""
+        } else {
+            return []
+        }
+
+        var items: [CoachMention] = []
+        if hasBloodReport, query.isEmpty || "report".hasPrefix(query) || "blood".hasPrefix(query) {
+            items.append(.report)
+        }
+        for keep in keepStore.keeps.prefix(6) {
+            if query.isEmpty || keep.label.lowercased().contains(query) {
+                items.append(.keep(keep))
+            }
+        }
+        return items
+    }
+
+    private var mentionPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(mentionCandidates) { mention in
+                    Button {
+                        applyMention(mention)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: mention.systemImage)
+                                .font(.caption2)
+                            Text(mention.title)
+                                .font(.caption.weight(.medium))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .surfaceCard(cornerRadius: 14)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(Theme.brandBorderGradient, lineWidth: 1)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
+        .background(.ultraThinMaterial)
+    }
+
+    private func applyMention(_ mention: CoachMention) {
+        let insertion: String
+        switch mention {
+        case .report:
+            insertion = "Using my blood report, "
+        case .keep(let keep):
+            insertion = "About this advice: \(keep.label) — "
+        }
+
+        if let at = inputText.lastIndex(of: "@"),
+           !String(inputText[inputText.index(after: at)...]).contains(where: { $0.isWhitespace }) {
+            inputText = String(inputText[..<at]) + insertion
+        } else {
+            inputText = insertion + inputText
+        }
+        showMentionPicker = false
+        inputFocused = true
+    }
+
     // MARK: - Input bar
 
     private var inputBar: some View {
         HStack(alignment: .bottom, spacing: 10) {
+            Button {
+                showMentionPicker.toggle()
+                if showMentionPicker {
+                    inputFocused = true
+                }
+            } label: {
+                Image(systemName: "at.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(
+                        (showMentionPicker || !mentionCandidates.isEmpty)
+                            ? Theme.brandCoral
+                            : Theme.muted
+                    )
+            }
+            .accessibilityLabel("Insert a source")
+            .disabled(keepStore.isEmpty && !hasBloodReport)
+
             TextField("Ask about your patterns…", text: $inputText, axis: .vertical)
                 .focused($inputFocused)
                 .lineLimit(1...4)
+                .textInputAutocapitalization(.sentences)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .surfaceCard(cornerRadius: 20)
                 .onSubmit { sendMessage() }
+                .onChange(of: inputText) { _, newValue in
+                    if newValue.last == "@" {
+                        showMentionPicker = true
+                    } else if !newValue.contains("@") {
+                        showMentionPicker = false
+                    }
+                }
 
             Button {
                 sendMessage()
@@ -388,8 +539,17 @@ struct CoachView: View {
 
         inputText = ""
         inputFocused = false
+        showMentionPicker = false
         isLoading = true
         errorMessage = nil
+        live = LiveCoachReply(
+            id: UUID(),
+            question: question,
+            answer: "",
+            sources: nil,
+            startedAt: .now,
+            hasToken: false
+        )
 
         // Build conversation history from the last 5 exchanges (10 turns)
         let recentMessages = messages.suffix(5)
@@ -400,35 +560,79 @@ struct CoachView: View {
             ]
         }
 
-        Task {
+        Task { @MainActor in
             do {
-                let answer = try await BackendService.askCoach(question: question, history: history)
-                await MainActor.run {
-                    let msg = CoachMessage(question: question, answer: answer)
-                    withAnimation { messages.append(msg) }
-                    saveMessages()
-                    // Auto-save conversation to Supermemory at 3 and 8 exchanges
-                    let count = messages.count
-                    if count == 3 || count == 8 {
-                        let snapshot = messages
-                        Task { await BackendService.saveConversation(snapshot) }
+                for try await event in BackendService.askCoachStream(question: question, history: history) {
+                    switch event {
+                    case .retrieving:
+                        break
+                    case .generating(let incoming):
+                        var next = live
+                        next?.sources = incoming
+                        live = next
+                    case .token(let text):
+                        let first = !(live?.hasToken ?? false)
+                        var next = live
+                        next?.answer += text
+                        next?.hasToken = true
+                        live = next
+                        if first {
+                            Haptics.impact(.light)
+                        }
+                    case .done:
+                        break
                     }
-                    isLoading = false
                 }
-            } catch {
-                await MainActor.run {
+
+                let finalAnswer = (live?.answer ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                let finalSources = live?.sources
+                let id = live?.id ?? UUID()
+                live = nil
+                guard !finalAnswer.isEmpty else {
                     isLoading = false
                     inputText = question
-                    let message = (error as? LocalizedError)?.errorDescription
-                        ?? "Couldn't reach the coach. Check your connection."
-                    withAnimation { errorMessage = message }
-                    // Clear the error after 4 seconds
-                    Task {
-                        try? await Task.sleep(for: .seconds(4))
-                        await MainActor.run {
-                            withAnimation { errorMessage = nil }
-                        }
-                    }
+                    withAnimation { errorMessage = "Coach returned an empty answer. Try again." }
+                    return
+                }
+                let msg = CoachMessage(
+                    id: id,
+                    question: question,
+                    answer: finalAnswer,
+                    sources: finalSources
+                )
+                withAnimation { messages.append(msg) }
+                saveMessages()
+                let count = messages.count
+                if count == 3 || count == 8 {
+                    let snapshot = messages
+                    Task { await BackendService.saveConversation(snapshot) }
+                }
+                isLoading = false
+            } catch {
+                let partial = live?.answer.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let sources = live?.sources
+                let id = live?.id ?? UUID()
+                live = nil
+                if !partial.isEmpty {
+                    let msg = CoachMessage(
+                        id: id,
+                        question: question,
+                        answer: partial,
+                        sources: sources
+                    )
+                    withAnimation { messages.append(msg) }
+                    saveMessages()
+                    isLoading = false
+                    return
+                }
+                isLoading = false
+                inputText = question
+                let message = (error as? LocalizedError)?.errorDescription
+                    ?? "Couldn't reach the coach. Check your connection."
+                withAnimation { errorMessage = message }
+                Task {
+                    try? await Task.sleep(for: .seconds(4))
+                    withAnimation { errorMessage = nil }
                 }
             }
         }
@@ -456,7 +660,11 @@ struct CoachView: View {
             let snapshot = messages
             Task { await BackendService.saveConversation(snapshot) }
         }
-        withAnimation { messages = [] }
+        withAnimation {
+            messages = []
+            live = nil
+        }
+        isLoading = false
         UserDefaults.standard.removeObject(forKey: storageKey)
     }
 
@@ -506,17 +714,53 @@ struct CoachView: View {
     }
 }
 
+// MARK: - Mentions
+
+private enum CoachMention: Identifiable {
+    case report
+    case keep(CoachKeep)
+
+    var id: String {
+        switch self {
+        case .report: return "report"
+        case .keep(let keep): return keep.id.uuidString
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .report: return "Blood report"
+        case .keep(let keep): return keep.label
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .report: return "doc.text"
+        case .keep: return "bookmark.fill"
+        }
+    }
+}
+
 // MARK: - Message Row
 
 struct MessageRow: View {
     let message: CoachMessage
     let isKept: Bool
+    var isStreaming: Bool = false
+    var showFollowUps: Bool = false
     let onKeep: () -> Void
     let onCopy: () -> Void
+    var onFollowUp: (String) -> Void = { _ in }
+
+    private static let followUps = [
+        "Explain that more simply",
+        "Turn this into a short weekly plan",
+        "What should I do next?"
+    ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Question bubble (user, trailing)
             HStack {
                 Spacer(minLength: 56)
                 Text(message.question)
@@ -526,23 +770,34 @@ struct MessageRow: View {
                     .nocturnePrimaryButton(cornerRadius: 18)
             }
 
-            // Answer (coach, leading)
             HStack(alignment: .top, spacing: 10) {
                 GradientIconBadge(systemName: "brain.head.profile", size: 28)
 
-                MarkdownContentView(text: message.answer)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .surfaceCard(cornerRadius: 18)
-                    .overlay(alignment: .topTrailing) {
-                        if isKept {
-                            Image(systemName: "bookmark.fill")
-                                .font(.caption2)
-                                .foregroundStyle(Theme.brandGradient)
-                                .padding(8)
-                        }
+                VStack(alignment: .leading, spacing: 8) {
+                    if let sources = message.sources, !sources.isEmpty {
+                        CoachSourceChips(sources: sources)
                     }
-                    .contextMenu {
+
+                    MarkdownContentView(text: message.answer)
+                    if isStreaming {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .padding(.top, 2)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .surfaceCard(cornerRadius: 18)
+                .overlay(alignment: .topTrailing) {
+                    if isKept {
+                        Image(systemName: "bookmark.fill")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.brandGradient)
+                            .padding(8)
+                    }
+                }
+                .contextMenu {
+                    if !isStreaming {
                         if isKept {
                             Button(role: .destructive) {
                                 onKeep()
@@ -558,45 +813,144 @@ struct MessageRow: View {
                         }
 
                         Button {
-                            onCopy()
+                            onFollowUp("Explain that last answer in simpler terms.")
                         } label: {
-                            Label("Copy", systemImage: "doc.on.doc")
+                            Label("Explain", systemImage: "text.magnifyingglass")
+                        }
+
+                        Button {
+                            onFollowUp("Shorten that last answer to 2–3 sentences.")
+                        } label: {
+                            Label("Shorten", systemImage: "arrow.down.right.and.arrow.up.left")
+                        }
+
+                        Button {
+                            onFollowUp("Make that last answer more specific to my recent check-ins.")
+                        } label: {
+                            Label("Improve", systemImage: "sparkles")
                         }
                     }
 
+                    Button {
+                        onCopy()
+                    } label: {
+                        Label("Copy", systemImage: "doc.on.doc")
+                    }
+                }
+
                 Spacer(minLength: 0)
+            }
+
+            if showFollowUps {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Self.followUps, id: \.self) { prompt in
+                            Button {
+                                onFollowUp(prompt)
+                            } label: {
+                                Text(prompt)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.primary)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .surfaceCard(cornerRadius: 14)
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .strokeBorder(Theme.brandBorderGradient, lineWidth: 1)
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .padding(.leading, 38)
             }
         }
     }
 }
 
-// MARK: - Typing Indicator
+// MARK: - Source chips
 
-struct TypingIndicatorView: View {
-    @State private var phase = 0
-    private let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
+struct CoachSourceChips: View {
+    let sources: CoachContextSources
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if sources.checkInCount > 0 {
+                chip(
+                    "\(sources.checkInCount) check-in\(sources.checkInCount == 1 ? "" : "s")",
+                    "figure.run"
+                )
+            }
+            if sources.profile > 0 {
+                chip("Profile", "person.crop.circle")
+            }
+            if sources.keeps > 0 {
+                chip(
+                    "\(sources.keeps) keep\(sources.keeps == 1 ? "" : "s")",
+                    "bookmark.fill"
+                )
+            }
+        }
+    }
+
+    private func chip(_ title: String, _ systemImage: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: systemImage)
+                .font(.caption2)
+            Text(title)
+                .font(.caption2.weight(.medium))
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Theme.brandGradientSoft, in: Capsule())
+    }
+}
+
+// MARK: - Thinking
+
+struct CoachThinkingView: View {
+    let startedAt: Date
+    var sources: CoachContextSources?
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             GradientIconBadge(systemName: "brain.head.profile", size: 28)
 
-            HStack(spacing: 5) {
-                ForEach(0..<3, id: \.self) { i in
-                    Circle()
-                        .fill(Color.secondary.opacity(phase == i ? 0.9 : 0.3))
-                        .frame(width: 7, height: 7)
-                        .animation(.easeInOut(duration: 0.3), value: phase)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Text("Thinking")
+                        .font(.subheadline.weight(.medium))
+                    TimelineView(.periodic(from: startedAt, by: 0.1)) { context in
+                        Text(elapsedLabel(context.date.timeIntervalSince(startedAt)))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let sources, !sources.isEmpty {
+                    CoachSourceChips(sources: sources)
+                } else {
+                    HStack(spacing: 5) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            Circle()
+                                .fill(Color.secondary.opacity(0.35))
+                                .frame(width: 6, height: 6)
+                        }
+                    }
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 14)
+            .padding(.vertical, 12)
             .surfaceCard(cornerRadius: 18)
 
             Spacer()
         }
-        .onReceive(timer) { _ in
-            phase = (phase + 1) % 3
-        }
+    }
+
+    private func elapsedLabel(_ interval: TimeInterval) -> String {
+        String(format: "%.1fs", max(0, interval))
     }
 }
 
