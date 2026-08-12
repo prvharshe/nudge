@@ -7,6 +7,9 @@ const router = express.Router();
 
 /** Supermemory search that degrades gracefully instead of failing the whole coach call. */
 async function safeSearch(userId, limit, query, type) {
+  if (!process.env.SUPERMEMORY_API_KEY) {
+    return [];
+  }
   try {
     return await searchMemories(userId, limit, query, type);
   } catch (err) {
@@ -96,9 +99,14 @@ router.post('/stream', async (req, res) => {
   sendSse(res, 'meta', { stage: 'retrieving' });
 
   // Abort upstream work if the client disconnects.
+  // Use `aborted`, not `req.close` — Node emits `close` on IncomingMessage when
+  // the POST body is fully read, which would otherwise kill the stream early.
   let closed = false;
-  req.on('close', () => {
+  req.on('aborted', () => {
     closed = true;
+  });
+  res.on('close', () => {
+    if (!res.writableEnded) closed = true;
   });
 
   try {

@@ -28,6 +28,9 @@ export function sendSse(res, event, data) {
     res.write(`data: ${line}\n`);
   }
   res.write('\n');
+  if (typeof res.flush === 'function') {
+    res.flush();
+  }
 }
 
 export function endSse(res) {

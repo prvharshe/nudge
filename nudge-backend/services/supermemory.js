@@ -53,6 +53,7 @@ export async function searchMemories(userId, limit = 14, query = 'movement exerc
       filters: { AND: andFilters },
       limit,
     }),
+    signal: AbortSignal.timeout(8000),
   });
 
   if (!res.ok) {
