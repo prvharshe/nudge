@@ -122,7 +122,65 @@ enum BackendService {
     // MARK: - Ask your coach (free-form Q&A against Supermemory history)
 
     static func askCoach(question: String, history: [[String: String]] = []) async throws -> String {
-        guard let url = URL(string: "\(baseURL)/api/coach") else {
+        let request = try coachURLRequest(path: "/api/coach", question: question, history: history)
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            try throwIfCoachHTTPError(response, data: data)
+            let json = try JSONDecoder().decode(CoachResponse.self, from: data)
+            return json.answer
+        } catch let error as BackendError {
+            throw error
+        } catch let error as URLError {
+            throw mapCoachURLError(error)
+        } catch is DecodingError {
+            throw BackendError.badResponse(nil)
+        }
+    }
+
+    /// Stream a coach answer over SSE (`POST /api/coach/stream`).
+    /// Falls back to the blocking JSON endpoint if the stream route is missing.
+    static func askCoachStream(
+        question: String,
+        history: [[String: String]] = []
+    ) -> AsyncThrowingStream<CoachStreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    try await consumeCoachSSE(
+                        question: question,
+                        history: history,
+                        continuation: continuation
+                    )
+                    continuation.finish()
+                } catch is CancellationError {
+                    continuation.finish()
+                } catch let error as CoachStreamUnavailable {
+                    do {
+                        let answer = try await askCoach(question: question, history: history)
+                        continuation.yield(.token(answer))
+                        continuation.yield(.done)
+                        continuation.finish()
+                    } catch {
+                        continuation.finish(throwing: error)
+                    }
+                } catch let error as URLError {
+                    continuation.finish(throwing: mapCoachURLError(error))
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private struct CoachStreamUnavailable: Error {}
+
+    private static func coachURLRequest(
+        path: String,
+        question: String,
+        history: [[String: String]]
+    ) throws -> URLRequest {
+        guard let url = URL(string: "\(baseURL)\(path)") else {
             throw URLError(.badURL)
         }
 
@@ -139,42 +197,136 @@ enum BackendService {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if path.hasSuffix("/stream") {
+            request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        // Cold starts + Supermemory search + Groq can exceed 20s
-        request.timeoutInterval = 45
+        // Cold start + retrieval + Groq; stream stays open until done.
+        request.timeoutInterval = 90
+        return request
+    }
 
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse else {
-                throw BackendError.unreachable
-            }
-            guard http.statusCode == 200 else {
-                let serverMsg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
-                    .flatMap { $0["error"] as? String }
-                if http.statusCode == 503, let serverMsg {
-                    throw BackendError.badResponse(serverMsg)
-                }
-                if (500...599).contains(http.statusCode) {
-                    throw BackendError.serverUnavailable(status: http.statusCode)
-                }
+    private static func throwIfCoachHTTPError(_ response: URLResponse, data: Data) throws {
+        guard let http = response as? HTTPURLResponse else {
+            throw BackendError.unreachable
+        }
+        guard http.statusCode == 200 else {
+            let serverMsg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
+                .flatMap { $0["error"] as? String }
+            if http.statusCode == 503, let serverMsg {
                 throw BackendError.badResponse(serverMsg)
             }
-
-            let json = try JSONDecoder().decode(CoachResponse.self, from: data)
-            return json.answer
-        } catch let error as BackendError {
-            throw error
-        } catch let error as URLError {
-            switch error.code {
-            case .timedOut, .notConnectedToInternet, .networkConnectionLost,
-                 .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
-                throw BackendError.unreachable
-            default:
-                throw BackendError.serverUnavailable(status: -1)
+            if (500...599).contains(http.statusCode) {
+                throw BackendError.serverUnavailable(status: http.statusCode)
             }
-        } catch is DecodingError {
-            throw BackendError.badResponse(nil)
+            throw BackendError.badResponse(serverMsg)
         }
+    }
+
+    private static func mapCoachURLError(_ error: URLError) -> BackendError {
+        switch error.code {
+        case .timedOut, .notConnectedToInternet, .networkConnectionLost,
+             .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+            return .unreachable
+        default:
+            return .serverUnavailable(status: -1)
+        }
+    }
+
+    private static func consumeCoachSSE(
+        question: String,
+        history: [[String: String]],
+        continuation: AsyncThrowingStream<CoachStreamEvent, Error>.Continuation
+    ) async throws {
+        let request = try coachURLRequest(path: "/api/coach/stream", question: question, history: history)
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw BackendError.unreachable
+        }
+
+        let contentType = http.value(forHTTPHeaderField: "Content-Type") ?? ""
+        if http.statusCode == 404 || !contentType.contains("text/event-stream") {
+            throw CoachStreamUnavailable()
+        }
+        if http.statusCode != 200 {
+            throw BackendError.serverUnavailable(status: http.statusCode)
+        }
+
+        var eventName = "message"
+        var dataLines: [String] = []
+
+        func flush() throws {
+            guard !dataLines.isEmpty else {
+                eventName = "message"
+                return
+            }
+            let data = dataLines.joined(separator: "\n")
+            dataLines.removeAll(keepingCapacity: true)
+            let name = eventName
+            eventName = "message"
+            try emitCoachSSE(event: name, data: data, continuation: continuation)
+        }
+
+        for try await line in bytes.lines {
+            try Task.checkCancellation()
+            if line.hasPrefix(":") { continue }
+            if line.isEmpty {
+                try flush()
+                continue
+            }
+            if line.hasPrefix("event:") {
+                eventName = line.dropFirst(6).trimmingCharacters(in: .whitespaces)
+            } else if line.hasPrefix("data:") {
+                dataLines.append(line.dropFirst(5).trimmingCharacters(in: .whitespaces))
+            }
+        }
+        try flush()
+    }
+
+    private static func emitCoachSSE(
+        event: String,
+        data: String,
+        continuation: AsyncThrowingStream<CoachStreamEvent, Error>.Continuation
+    ) throws {
+        switch event {
+        case "token":
+            if let text = decodeSSEText(data), !text.isEmpty {
+                continuation.yield(.token(text))
+            }
+        case "meta":
+            if let meta = decodeSSEMeta(data) {
+                if meta.stage == "retrieving" {
+                    continuation.yield(.retrieving)
+                } else if meta.stage == "generating" {
+                    continuation.yield(.generating(meta.sources ?? .empty))
+                }
+            }
+        case "error":
+            let message = decodeSSEError(data) ?? "Failed to generate answer"
+            throw BackendError.badResponse(message)
+        case "done":
+            continuation.yield(.done)
+        default:
+            break
+        }
+    }
+
+    private static func decodeSSEText(_ data: String) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: Data(data.utf8)) as? [String: Any] else {
+            return data.isEmpty ? nil : data
+        }
+        return json["text"] as? String
+    }
+
+    private static func decodeSSEError(_ data: String) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: Data(data.utf8)) as? [String: Any] else {
+            return data
+        }
+        return json["error"] as? String
+    }
+
+    private static func decodeSSEMeta(_ data: String) -> CoachSSEMeta? {
+        try? JSONDecoder().decode(CoachSSEMeta.self, from: Data(data.utf8))
     }
 
     // MARK: - Post-log one-sentence reaction
@@ -567,6 +719,11 @@ private struct NudgeResponse: Decodable {
 
 private struct CoachResponse: Decodable {
     let answer: String
+}
+
+private struct CoachSSEMeta: Decodable {
+    let stage: String?
+    let sources: CoachContextSources?
 }
 
 private struct ReactionResponse: Decodable {
