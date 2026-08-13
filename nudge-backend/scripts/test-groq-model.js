@@ -27,10 +27,10 @@ assert.equal(shortCall.temperature, 0.85);
 
 const coachCall = buildGroqChatParams({
   messages: [{ role: 'user', content: 'hi' }],
-  max_tokens: 1024,
+  max_tokens: 2048,
   temperature: 0.75,
 });
-assert.equal(coachCall.max_tokens, 1024, 'larger caps should be preserved');
+assert.equal(coachCall.max_tokens, 2048, 'larger caps should be preserved');
 
 const override = buildGroqChatParams({
   model: 'custom/model',

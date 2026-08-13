@@ -141,10 +141,11 @@ struct MarkdownContentView: View {
     }
 
     private func attributed(_ markdown: String) -> AttributedString {
-        (try? AttributedString(
-            markdown: markdown,
-            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        )) ?? AttributedString(markdown)
+        let cleaned = MarkdownHTML.unescape(markdown)
+        return (try? AttributedString(
+            markdown: cleaned,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
+        )) ?? AttributedString(cleaned)
     }
 }
 
@@ -181,6 +182,7 @@ struct MarkdownTableView: View {
                     cell(
                         header,
                         isHeader: true,
+                        columnIndex: index,
                         isLastColumn: index == table.headers.count - 1
                     )
                 }
@@ -193,6 +195,7 @@ struct MarkdownTableView: View {
                             value,
                             isHeader: false,
                             isZebra: rowIndex.isMultiple(of: 2) == false,
+                            columnIndex: columnIndex,
                             isLastColumn: columnIndex == row.count - 1,
                             isLastRow: rowIndex == table.rows.count - 1
                         )
@@ -208,9 +211,11 @@ struct MarkdownTableView: View {
         _ value: String,
         isHeader: Bool,
         isZebra: Bool = false,
+        columnIndex: Int,
         isLastColumn: Bool,
         isLastRow: Bool = false
     ) -> some View {
+        let isLeadingColumn = columnIndex == 0
         Text(attributedCell(value))
             .font(isHeader ? .caption.weight(.semibold) : .caption)
             .foregroundStyle(.primary.opacity(isHeader ? 1 : 0.92))
@@ -221,8 +226,9 @@ struct MarkdownTableView: View {
             .padding(.vertical, isHeader ? 9 : 8)
             .frame(
                 minWidth: usesHorizontalScroll ? 88 : nil,
-                maxWidth: usesHorizontalScroll ? nil : .infinity,
-                alignment: .leading
+                maxWidth: usesHorizontalScroll || !isLeadingColumn ? .infinity : nil,
+                maxHeight: .infinity,
+                alignment: .topLeading
             )
             .background {
                 if isHeader {
@@ -250,40 +256,46 @@ struct MarkdownTableView: View {
     }
 
     private func attributedCell(_ value: String) -> AttributedString {
-        (try? AttributedString(
-            markdown: value,
+        let cleaned = MarkdownHTML.unescape(value)
+        return (try? AttributedString(
+            markdown: cleaned,
             options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        )) ?? AttributedString(value)
+        )) ?? AttributedString(cleaned)
+    }
+}
+
+// MARK: - HTML leftovers in model output
+
+private enum MarkdownHTML {
+    static func unescape(_ raw: String) -> String {
+        raw
+            .replacingOccurrences(of: #"(?i)<br\s*/?>"#, with: "\n", options: .regularExpression)
+            .replacingOccurrences(of: #"(?i)</p>"#, with: "\n", options: .regularExpression)
+            .replacingOccurrences(of: #"(?i)<p[^>]*>"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
     }
 }
 
 #Preview("Coach tables") {
     let sample = """
-    Here’s a revised plan that keeps the same calorie-and-protein framework.
+    ### Week 1 – Foundation
 
-    **Nutrition (≈ 2 700 kcal, 117 g protein)**
-    | Meal | Food | Qty | Calories | Protein |
-    |------|------|-----|----------|---------|
-    | Breakfast | Greek yogurt (plain) + berries + chia seeds | 1 cup + ½ cup + 1 tbsp | 250 | 20 g |
-    | Snack | Apple + 2 Tbsp peanut butter | 1 medium + 2 Tbsp | 250 | 6 g |
-    | Lunch | Grilled chicken breast + quinoa + roasted veggies | 150 g + ½ cup + 1 cup | 450 | 35 g |
-    | Snack | Cottage cheese + sliced cucumber | ½ cup + ½ cup | 150 | 15 g |
-    | Dinner | Stir-fried tofu + brown rice + peppers | 150 g tofu + ½ cup rice + 1 cup | 400 | 25 g |
-    | Evening | Protein shake + banana | 1 scoop + 1 medium | 300 | 25 g |
-    | **Total** |  |  | **2 700** | **117 g** |
+    | Day | Exercise (duration) | Sample Meal Plan |
+    |-----|---------------------|------------------|
+    | Mon | 30 min steady-state jog | Breakfast: 1 banana<br>Lunch: chicken + quinoa<br>Dinner: yogurt + berries |
+    | Wed | Strength 40 min | Breakfast: eggs · Lunch: chicken salad · Dinner: rice bowl |
 
-    *Swap tofu for extra chicken or lean beef if you prefer more animal protein.*
+    ### Week 2 – Intensity Boost
 
-    **Workout (5 days/week, 60 min each)**
-    | Day | Activity | Notes |
-    |-----|----------|-------|
-    | Mon | HIIT run (30 min) + core | 5 × 1 min sprint + 1 min walk |
-    | Tue | Strength: Upper body | 3 × 12 reps, moderate weight |
-    | Wed | Steady-state cardio | 45 min at 60–70 % HRmax |
-    | Thu | Strength: Lower body | 3 × 12 reps, moderate weight |
-    | Fri | HIIT + bodyweight circuit | 20 min HIIT + 20 min bodyweight |
-    | Sat | Rest or light yoga | Recovery focus |
-    | Sun | Long walk or light hike | 60 min, conversational pace |
+    | Day | Exercise (duration) | Sample Meal Plan |
+    |-----|---------------------|------------------|
+    | Mon | Jog + 5 min intervals | Same as week 1; add 1 snack |
+    | Fri | Strength 45 min | Chicken over fish; keep quinoa |
+
+    - Add 5 min to one cardio session
     """
 
     ScrollView {
