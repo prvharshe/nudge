@@ -146,11 +146,19 @@ enum BackendService {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    try await consumeCoachSSE(
+                    let request = try coachURLRequest(
+                        path: "/api/coach/stream",
                         question: question,
-                        history: history,
+                        history: history
+                    )
+                    let tokenCount = try await consumeCoachSSE(
+                        request: request,
                         continuation: continuation
                     )
+                    // Zero tokens: GPT-OSS/reasoning-only or a parser miss — use JSON.
+                    if tokenCount == 0 {
+                        throw CoachStreamUnavailable()
+                    }
                     continuation.finish()
                 } catch is CancellationError {
                     continuation.finish()
@@ -233,12 +241,12 @@ enum BackendService {
         }
     }
 
+    /// Parse SSE from raw bytes. Do not use `bytes.lines` — it omits the blank
+    /// lines that terminate SSE events, so every event would be flushed as `done`.
     private static func consumeCoachSSE(
-        question: String,
-        history: [[String: String]],
+        request: URLRequest,
         continuation: AsyncThrowingStream<CoachStreamEvent, Error>.Continuation
-    ) async throws {
-        let request = try coachURLRequest(path: "/api/coach/stream", question: question, history: history)
+    ) async throws -> Int {
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw BackendError.unreachable
@@ -252,27 +260,71 @@ enum BackendService {
             throw BackendError.serverUnavailable(status: http.statusCode)
         }
 
+        var buffer = Data()
+        buffer.reserveCapacity(1024)
+        var tokenCount = 0
+
+        for try await byte in bytes {
+            try Task.checkCancellation()
+            buffer.append(byte)
+            while let boundary = sseEventBoundary(in: buffer) {
+                let block = buffer.subdata(in: 0..<boundary.end)
+                buffer.removeSubrange(0..<boundary.next)
+                tokenCount += try emitSSEBlock(block, continuation: continuation)
+            }
+        }
+        if !buffer.isEmpty {
+            tokenCount += try emitSSEBlock(buffer, continuation: continuation)
+        }
+        return tokenCount
+    }
+
+    private static func sseEventBoundary(in buffer: Data) -> (end: Int, next: Int)? {
+        if let range = buffer.range(of: Data([0x0D, 0x0A, 0x0D, 0x0A])) {
+            return (range.lowerBound, range.upperBound)
+        }
+        if let range = buffer.range(of: Data([0x0A, 0x0A])) {
+            return (range.lowerBound, range.upperBound)
+        }
+        return nil
+    }
+
+    private static func emitSSEBlock(
+        _ block: Data,
+        continuation: AsyncThrowingStream<CoachStreamEvent, Error>.Continuation
+    ) throws -> Int {
+        guard let text = String(data: block, encoding: .utf8) else { return 0 }
+
         var eventName = "message"
         var dataLines: [String] = []
 
-        func flush() throws {
+        func flush() throws -> Int {
             guard !dataLines.isEmpty else {
                 eventName = "message"
-                return
+                return 0
             }
             let data = dataLines.joined(separator: "\n")
             dataLines.removeAll(keepingCapacity: true)
             let name = eventName
             eventName = "message"
-            try emitCoachSSE(event: name, data: data, continuation: continuation)
+            return try emitCoachSSE(event: name, data: data, continuation: continuation)
         }
 
-        for try await line in bytes.lines {
-            try Task.checkCancellation()
+        let normalized = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+
+        var tokens = 0
+        for rawLine in normalized.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = String(rawLine)
             if line.hasPrefix(":") { continue }
             if line.isEmpty {
-                try flush()
+                tokens += try flush()
                 continue
+            }
+            // If blank delimiters were lost, a new `event:` starts the next frame.
+            if line.hasPrefix("event:"), !dataLines.isEmpty {
+                tokens += try flush()
             }
             if line.hasPrefix("event:") {
                 eventName = line.dropFirst(6).trimmingCharacters(in: .whitespaces)
@@ -280,19 +332,23 @@ enum BackendService {
                 dataLines.append(line.dropFirst(5).trimmingCharacters(in: .whitespaces))
             }
         }
-        try flush()
+        tokens += try flush()
+        return tokens
     }
 
+    @discardableResult
     private static func emitCoachSSE(
         event: String,
         data: String,
         continuation: AsyncThrowingStream<CoachStreamEvent, Error>.Continuation
-    ) throws {
+    ) throws -> Int {
         switch event {
         case "token":
             if let text = decodeSSEText(data), !text.isEmpty {
                 continuation.yield(.token(text))
+                return 1
             }
+            return 0
         case "meta":
             if let meta = decodeSSEMeta(data) {
                 if meta.stage == "retrieving" {
@@ -301,13 +357,15 @@ enum BackendService {
                     continuation.yield(.generating(meta.sources ?? .empty))
                 }
             }
+            return 0
         case "error":
             let message = decodeSSEError(data) ?? "Failed to generate answer"
             throw BackendError.badResponse(message)
         case "done":
             continuation.yield(.done)
+            return 0
         default:
-            break
+            return 0
         }
     }
 

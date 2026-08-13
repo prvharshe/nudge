@@ -213,7 +213,7 @@ struct MarkdownTableView: View {
     ) -> some View {
         Text(attributedCell(value))
             .font(isHeader ? .caption.weight(.semibold) : .caption)
-            .foregroundStyle(isHeader ? .primary : .primary.opacity(0.92))
+            .foregroundStyle(.primary.opacity(isHeader ? 1 : 0.92))
             .multilineTextAlignment(.leading)
             .lineLimit(usesHorizontalScroll ? 3 : nil)
             .fixedSize(horizontal: false, vertical: true)
