@@ -88,14 +88,13 @@ struct CoachView: View {
                             .transition(.opacity)
                     }
 
-                    if !keepStore.isEmpty {
+                    if showMentionPicker && !mentionCandidates.isEmpty {
+                        mentionPicker
+                    } else if !keepStore.isEmpty {
                         keepsChipStrip
                     }
 
                     Divider()
-                    if showMentionPicker && !mentionCandidates.isEmpty {
-                        mentionPicker
-                    }
                     inputBar
                 }
                 .background(AmbientBackground())
