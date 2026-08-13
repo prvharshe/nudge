@@ -279,7 +279,7 @@ struct CalendarView: View {
 
     private var weekdayRow: some View {
         HStack(spacing: 4) {
-            ForEach(weekdaySymbols, id: \.self) { symbol in
+            ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { _, symbol in
                 Text(symbol)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
