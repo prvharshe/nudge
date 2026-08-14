@@ -1,28 +1,23 @@
 import { Router } from 'express';
+import { formatEntryContent, resolveEntryCalendarDate } from '../services/dates.js';
 import { addMemory, deleteAllEntries, checkUserHasEntries, restoreEntries, scanAllEntries } from '../services/supermemory.js';
 
 const router = Router();
 
 /**
  * POST /api/entries
- * Body: { userId, date, didMove, activities[], note? }
+ * Body: { userId, calendarDate?, date, didMove, activities[], note? }
  *
  * Stores the evening check-in entry in Supermemory as natural language.
+ * Prefer calendarDate (YYYY-MM-DD, local day on device) so UTC ISO midnights
+ * do not shift the logged day (e.g. IST Aug 8 → Aug 7).
  */
 router.post('/', async (req, res) => {
-  const { userId, date, didMove, activities = [], note, steps, workoutMinutes, calories, workoutType, sleepHours, restingHR, hrv, foodCalories, protein, carbs, fat } = req.body;
+  const { userId, calendarDate, date, didMove, activities = [], note, steps, workoutMinutes, calories, workoutType, sleepHours, restingHR, hrv, foodCalories, protein, carbs, fat } = req.body;
 
   if (!userId || typeof didMove !== 'boolean') {
     return res.status(400).json({ error: 'userId and didMove are required' });
   }
-
-  // Format as natural language for Supermemory
-  const dateStr = date ? new Date(date).toDateString() : new Date().toDateString();
-  const movementStr = didMove ? 'did move' : 'did not move';
-  const activityStr = activities.length > 0
-    ? `Activities: ${activities.join(', ')}.`
-    : '';
-  const noteStr = note ? `Note: "${note}".` : '';
 
   const hkParts = [
     steps != null         ? `Steps: ${Number(steps).toLocaleString()}.` : '',
@@ -37,14 +32,27 @@ router.post('/', async (req, res) => {
     fat != null          ? `Fat: ${fat}g.` : '',
   ].filter(Boolean).join(' ');
 
-  const content = `On ${dateStr}, the user ${movementStr}. ${activityStr} ${noteStr} ${hkParts}`.trim().replace(/\s+/g, ' ');
+  const ymd = resolveEntryCalendarDate({ calendarDate, date });
+  const content = formatEntryContent({
+    calendarDate: ymd,
+    date,
+    didMove,
+    activities,
+    note,
+    hkParts,
+  });
+
+  const snapshot = ymd
+    ? { date: ymd, didMove, activities, note: note || null }
+    : null;
 
   try {
-    await addMemory(content, userId, 'entry');
+    await addMemory(content, userId, 'entry', [], snapshot ? { nudgeEntry: snapshot } : {});
     res.json({ ok: true });
   } catch (err) {
     console.error('[entries] Supermemory error:', err.message);
-    // Return 200 anyway so the iOS app doesn't retry indefinitely
+    // Still HTTP 200 so flaky SM does not spin the client — body.ok is false.
+    // Clients must check ok before marking the entry synced.
     res.json({ ok: false, error: err.message });
   }
 });

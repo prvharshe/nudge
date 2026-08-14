@@ -1,5 +1,6 @@
 import express from 'express';
-import { searchMemories } from '../services/supermemory.js';
+import { snapshotToPromptLine } from '../services/dates.js';
+import { searchMemories, restoreEntries } from '../services/supermemory.js';
 import { generateCoachAnswer, streamCoachAnswer } from '../services/groq.js';
 import { endSse, initSse, sendSse } from '../services/sse.js';
 
@@ -18,10 +19,28 @@ async function safeSearch(userId, limit, query, type) {
   }
 }
 
+/**
+ * True chronological recent check-ins (newest first), not semantic "relevance".
+ * Falls back to the old semantic query if restore fails.
+ */
+async function loadRecentEntries(userId) {
+  if (!process.env.SUPERMEMORY_API_KEY) {
+    return [];
+  }
+  try {
+    const restored = await restoreEntries(userId);
+    // restoreEntries is oldest→newest; take the newest 14 for the prompt.
+    return restored.slice(-14).reverse().map(snapshotToPromptLine);
+  } catch (err) {
+    console.warn('coach restoreEntries failed, falling back to search:', err.message);
+    return safeSearch(userId, 14, 'movement exercise activity rest day check-in', 'entry');
+  }
+}
+
 async function loadCoachContext(userId, question) {
   const q = question.trim();
   const [recentEntries, semanticHits, profileMems, keptInsights] = await Promise.all([
-    safeSearch(userId, 14, 'movement exercise activity rest day check-in', 'entry'),
+    loadRecentEntries(userId),
     safeSearch(userId, 8, q, 'entry'),
     safeSearch(userId, 1, 'user profile fitness goals', 'profile'),
     safeSearch(userId, 3, q, 'insight'),
@@ -34,7 +53,7 @@ async function loadCoachContext(userId, question) {
  * Body: { userId, question, history?, goal?, profileSummary? }
  *
  * Dual retrieval:
- *   1. Recent dated check-ins (type: entry) — chronological primary context
+ *   1. Recent dated check-ins via restoreEntries — true newest-first chronology
  *   2. Limited semantic entry hits tuned to the question
  *   3. Profile memory (always)
  *   4. User-kept advice (type: insight) — high-signal anchors the user chose to save

@@ -229,6 +229,19 @@ struct SettingsView: View {
                             .font(.caption.monospaced())
                             .foregroundStyle(.secondary)
                     }
+                    .contextMenu {
+                        Button {
+                            UIPasteboard.general.string = UserService.userId
+                        } label: {
+                            Label("Copy full User ID", systemImage: "doc.on.doc")
+                        }
+                    }
+                    Button {
+                        UIPasteboard.general.string = UserService.userId
+                    } label: {
+                        Label("Copy full User ID", systemImage: "doc.on.doc")
+                            .font(.caption)
+                    }
                     HStack {
                         Label("Local entries", systemImage: "calendar")
                         Spacer()

@@ -737,9 +737,15 @@ struct EditEntryView: View {
 
         Task {
             let stats = await HealthKitService.shared.fetchStats(for: entry.date)
-            try? await BackendService.syncEntry(entry, stats: stats)
+            var didSync = false
+            do {
+                try await BackendService.syncEntry(entry, stats: stats)
+                didSync = true
+            } catch {
+                didSync = false
+            }
             await MainActor.run {
-                entry.synced = true
+                entry.synced = didSync
                 isSaving = false
                 dismiss()
             }

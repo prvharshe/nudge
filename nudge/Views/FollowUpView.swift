@@ -215,13 +215,21 @@ struct FollowUpView: View {
         Task {
             async let reactionFetch = BackendService.fetchReaction(didMove: didMove, activities: activities)
             let stats = await HealthKitService.shared.fetchStats(for: entryDate)
-            async let syncTask: () = BackendService.syncEntry(entry, stats: stats)
+
+            // Sync in parallel with the reaction fetch; only mark synced on real success.
+            let syncTask = Task {
+                try await BackendService.syncEntry(entry, stats: stats)
+            }
 
             if let text = try? await reactionFetch {
                 await MainActor.run { reactionText = text }
             }
-            try? await syncTask
-            await MainActor.run { entry.synced = true }
+            do {
+                try await syncTask.value
+                await MainActor.run { entry.synced = true }
+            } catch {
+                // Leave synced=false so a later pass can retry; do not pretend SM has it.
+            }
 
             // Store life context memory if user flagged something
             if let tag = capturedContextTag,
