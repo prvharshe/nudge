@@ -39,6 +39,8 @@ enum BackendService {
         let formatter = ISO8601DateFormatter()
         var body: [String: Any] = [
             "userId": UserService.userId,
+            // Local calendar day — avoids UTC midnight shifting the logged date in Supermemory.
+            "calendarDate": calendarDateString(from: entry.date),
             "date": formatter.string(from: entry.date),
             "didMove": entry.didMove,
             "activities": entry.activities,
@@ -64,10 +66,24 @@ enum BackendService {
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         request.timeoutInterval = 10
 
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw URLError(.badServerResponse)
         }
+        // Backend returns 200 with { ok: false } when Supermemory write fails.
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let ok = json["ok"] as? Bool, ok == false {
+            throw URLError(.badServerResponse)
+        }
+    }
+
+    /// YYYY-MM-DD for the user's local calendar day of `date`.
+    static func calendarDateString(from date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        let y = parts.year ?? 0
+        let m = parts.month ?? 0
+        let d = parts.day ?? 0
+        return String(format: "%04d-%02d-%02d", y, m, d)
     }
 
     // MARK: - Fetch morning nudge message
