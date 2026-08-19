@@ -9,6 +9,7 @@
     "dev": "node --watch index.js",
     "test": "node scripts/test-groq-model.js",
     "test:dates": "node scripts/test-dates.js",
+    "test:truncate-map": "node scripts/test-truncate-map.js",
     "test:smoke": "node scripts/smoke-coach.js",
     "test:sse": "node scripts/verify-sse.js"
   },
