@@ -209,10 +209,16 @@ export function buildCoachMessages(
   keptInsights = []
 ) {
   const today = new Date().toDateString();
-  const sortedRecent = preferRecentWindow(sortEntriesByDate(recentEntries.map(truncateChunk)), 14);
+  const sortedRecent = preferRecentWindow(
+    sortEntriesByDate(recentEntries.map((e) => truncateChunk(e))),
+    14
+  );
 
   const recentSet = new Set(sortedRecent);
-  const semanticExtra = semanticHits.map(truncateChunk).filter(e => !recentSet.has(e)).slice(0, 5);
+  const semanticExtra = semanticHits
+    .map((e) => truncateChunk(e))
+    .filter(e => !recentSet.has(e))
+    .slice(0, 5);
 
   const recentText = sortedRecent.length > 0
     ? sortedRecent.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n')
@@ -227,7 +233,7 @@ export function buildCoachMessages(
   }
 
   if (profileMems.length > 0) {
-    systemWithContext += `\n\nPersistent user profile (from memory):\n${profileMems.map(truncateChunk).join('\n')}`;
+    systemWithContext += `\n\nPersistent user profile (from memory):\n${profileMems.map((e) => truncateChunk(e)).join('\n')}`;
   }
 
   if (keptInsights.length > 0) {
