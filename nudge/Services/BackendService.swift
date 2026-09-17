@@ -91,6 +91,7 @@ enum BackendService {
         let userId = UserService.userId
         let userName = UserDefaults.standard.string(forKey: "nudge.userName") ?? ""
         var urlString = "\(baseURL)/api/nudge?userId=\(userId)"
+        urlString += "&calendarDate=\(calendarDateString(from: Date.now))"
         if !userName.isEmpty,
            let encoded = userName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
             urlString += "&userName=\(encoded)"

@@ -1,4 +1,11 @@
 import Groq from 'groq-sdk';
+import {
+  annotateEntryForPrompt,
+  calendarDateFromEntry,
+  formatRelativeDateBlock,
+  isCalendarDate,
+  utcTodayYmd,
+} from './dates.js';
 
 /** Groq production model ID for chat-completion workloads (nudge, coach, etc.). */
 export const DEFAULT_GROQ_CHAT_MODEL = 'openai/gpt-oss-20b';
@@ -41,8 +48,11 @@ export function buildGroqChatParams(params) {
 const NUDGE_SYSTEM_PROMPT = `You are a warm, encouraging personal movement coach.
 Your job is to write exactly 2 sentences as a morning nudge message.
 Rules:
-- Each entry includes a date — use those dates to understand what is recent vs old. The most recent entry is the most important.
+- Each entry is prefixed with [YYYY-MM-DD, relative age]. Trust that prefix over your own date math.
+- The most recent entry is the most important.
 - ONLY reference things that are explicitly stated in the entries. Never invent or assume activities or outcomes.
+- Never say "yesterday" or "last Monday/Tuesday/..." unless an entry prefix uses that phrase exactly. A Thursday from weeks ago is not "last Thursday".
+- If an entry is 7 or more days old, name the calendar date (e.g. "on 27 August"), never a relative weekday.
 - If the most recent entry says "did not move", acknowledge that honestly and gently — do not imply they moved
 - Never use generic filler phrases like "keep it up", "great job", or "you've got this"
 - Zero guilt or pressure — this is purely supportive
@@ -111,10 +121,10 @@ Rules:
  * Returns a Date object, or epoch if parsing fails.
  */
 function parseDateFromEntry(entry) {
-  const match = entry.match(/^On (.+?),/);
-  if (!match) return new Date(0);
-  const d = new Date(match[1]);
-  return isNaN(d.getTime()) ? new Date(0) : d;
+  const ymd = calendarDateFromEntry(entry);
+  if (!ymd) return new Date(0);
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 12));
 }
 
 /**
@@ -162,26 +172,29 @@ function goalLabel(goal) {
  * Generate a personalised 2-sentence morning nudge.
  * @param {string[]} entries  Entries from Supermemory (any order)
  * @param {string}   userName The user's first name (default: 'friend')
+ * @param {string|null} calendarDate Device-local YYYY-MM-DD
  * @returns {string}          The 2-sentence nudge message
  */
-export async function generateNudge(entries, userName = 'friend', recoveryContext = null, goal = null, profileSummary = null) {
+export async function generateNudge(entries, userName = 'friend', recoveryContext = null, goal = null, profileSummary = null, calendarDate = null) {
   if (entries.length === 0) {
     return `Today is a great day to start tracking your movement, ${userName} — even a short walk counts. Check in tonight and I'll have something personal for you tomorrow morning.`;
   }
 
+  const todayYmd = isCalendarDate(calendarDate) ? calendarDate : utcTodayYmd();
   // Sort by the date embedded in the entry text so Groq sees true chronological order
   const sorted = sortEntriesByDate(entries).slice(0, 14);
-
-  const today = new Date().toDateString(); // e.g. "Thu Mar 13 2025"
-  const context = sorted.map((e, i) => `Entry ${i + 1}: ${e}`).join('\n');
+  const context = sorted
+    .map((e, i) => `Entry ${i + 1}: ${annotateEntryForPrompt(e, todayYmd)}`)
+    .join('\n');
 
   const recoveryLine = recoveryContext
     ? `\nToday's recovery signal (from Apple Health): ${recoveryContext}`
     : '';
   const goalContext = goalLine(goal);
   const profileLine = profileSummary ? `\n${profileSummary}` : '';
+  const dateBlock = formatRelativeDateBlock(todayYmd);
 
-  const userPrompt = `Today's date: ${today}${recoveryLine}${goalContext}${profileLine}\n\nYou are writing for someone named ${userName}. Here are their recent movement entries, sorted newest first:\n\n${context}\n\nWrite their 2-sentence morning nudge for today. You may naturally use their name (${userName}) once if it feels right.`;
+  const userPrompt = `${dateBlock}${recoveryLine}${goalContext}${profileLine}\n\nYou are writing for someone named ${userName}. Here are their movement entries, newest first. The bracketed age is computed — do not reinterpret it:\n\n${context}\n\nWrite their 2-sentence morning nudge for today. You may naturally use their name (${userName}) once if it feels right.`;
 
   const completion = await groqChat({
     messages: [
