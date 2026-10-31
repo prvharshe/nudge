@@ -698,8 +698,10 @@ enum BackendService {
     }
 
     // MARK: - Restore entries from backend
-    static func restoreEntries() async throws -> [RestoredEntry] {
-        guard let url = URL(string: "\(baseURL)/api/entries?userId=\(UserService.userId)") else {
+    /// Pass an old userId to claim data from a previous install; nil means the current user.
+    /// (Optional rather than `= UserService.userId`: default arguments are evaluated off the main actor.)
+    static func restoreEntries(userId: String? = nil) async throws -> [RestoredEntry] {
+        guard let url = URL(string: "\(baseURL)/api/entries?userId=\(userId ?? UserService.userId)") else {
             throw URLError(.badURL)
         }
         var request = URLRequest(url: url)
@@ -758,33 +760,6 @@ enum BackendService {
         let userId = try JSONDecoder().decode(AccountRestoreResponse.self, from: data).userId
         UserService.restoreAccount(userId: userId, recoveryCode: normalizedCode)
         await registerRecoveryCode()
-    }
-
-    /// Last resort: scan ALL nudge entries from Supermemory (no userId filter)
-    static func recoverAllEntries() async -> [RestoredEntry] {
-        guard let url = URL(string: "\(baseURL)/api/entries/recover-all") else { return [] }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 30
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse, http.statusCode == 200,
-              let result = try? JSONDecoder().decode(EntryRestoreResponse.self, from: data) else {
-            return []
-        }
-        return result.entries
-    }
-
-    /// Manually claim data from another userId (if the user knows their old userId)
-    static func restoreEntriesForUserId(_ oldUserId: String) async throws -> [RestoredEntry] {
-        guard let url = URL(string: "\(baseURL)/api/entries?userId=\(oldUserId)") else {
-            throw URLError(.badURL)
-        }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 30
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw URLError(.badServerResponse)
-        }
-        return try JSONDecoder().decode(EntryRestoreResponse.self, from: data).entries
     }
 }
 
