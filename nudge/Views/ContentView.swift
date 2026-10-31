@@ -117,6 +117,7 @@ struct ContentView: View {
             Task { await UserProfile.syncToSupermemoryIfChanged() }
             // Check for recoverable history on first launch
             await checkForRecoverableHistory()
+            await syncUnsyncedEntries()
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
@@ -161,7 +162,9 @@ struct ContentView: View {
 
         Task {
             let stats = await HealthKitService.shared.fetchStats(for: entry.date)
-            try? await BackendService.syncEntry(entry, stats: stats)
+            if (try? await BackendService.syncEntry(entry, stats: stats)) != nil {
+                entry.synced = true
+            }
         }
     }
 
@@ -179,6 +182,16 @@ struct ContentView: View {
                 restoreEntryCount = result.count
                 restoreLatestDate = result.latestDate ?? ""
                 showRestorePrompt = true
+            }
+        }
+    }
+
+    /// Retries entries whose earlier sync failed (offline, backend down). Marks synced only on success.
+    private func syncUnsyncedEntries() async {
+        for entry in entries where !entry.synced {
+            let stats = await HealthKitService.shared.fetchStats(for: entry.date)
+            if (try? await BackendService.syncEntry(entry, stats: stats)) != nil {
+                entry.synced = true
             }
         }
     }
