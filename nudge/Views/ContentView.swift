@@ -117,6 +117,7 @@ struct ContentView: View {
             Task { await UserProfile.syncToSupermemoryIfChanged() }
             // Check for recoverable history on first launch
             await checkForRecoverableHistory()
+            await syncUnsyncedEntries()
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
@@ -161,7 +162,9 @@ struct ContentView: View {
 
         Task {
             let stats = await HealthKitService.shared.fetchStats(for: entry.date)
-            try? await BackendService.syncEntry(entry, stats: stats)
+            if (try? await BackendService.syncEntry(entry, stats: stats)) != nil {
+                entry.synced = true
+            }
         }
     }
 
@@ -183,22 +186,21 @@ struct ContentView: View {
         }
     }
 
+    /// Retries entries whose earlier sync failed (offline, backend down). Marks synced only on success.
+    private func syncUnsyncedEntries() async {
+        for entry in entries where !entry.synced {
+            let stats = await HealthKitService.shared.fetchStats(for: entry.date)
+            if (try? await BackendService.syncEntry(entry, stats: stats)) != nil {
+                entry.synced = true
+            }
+        }
+    }
+
     private func restoreHistory() {
         Task {
             do {
                 let restored = try await BackendService.restoreEntries()
-                let existingDays = Set(entries.map { Calendar.current.startOfDay(for: $0.date) })
-                var imported = 0
-                for item in restored {
-                    guard let date = Self.restoreDateFormatter.date(from: item.date) else { continue }
-                    let day = Calendar.current.startOfDay(for: date)
-                    guard !existingDays.contains(day) else { continue }
-                    let entry = Entry(date: day, didMove: item.didMove, activities: item.activities, note: item.note)
-                    entry.synced = true
-                    modelContext.insert(entry)
-                    imported += 1
-                }
-                try modelContext.save()
+                _ = try Entry.importRestored(restored, existing: entries, into: modelContext)
                 await MainActor.run {
                     markRestored()
                     showRestorePrompt = false
@@ -215,13 +217,6 @@ struct ContentView: View {
     private func markRestored() {
         UserDefaults.standard.set(true, forKey: "nudge.hasRestoredHistory")
     }
-
-    private static let restoreDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = TimeZone(secondsFromGMT: 0)
-        return f
-    }()
 
     // MARK: - Today Tab
 

@@ -31,6 +31,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Offline checks (no API keys needed); a failure stops the deploy.
+      - name: Test
+        run: |
+          npm ci
+          npm test
+          npm run test:dates
+          npm run test:restore
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:

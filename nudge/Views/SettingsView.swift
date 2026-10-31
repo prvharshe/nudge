@@ -51,11 +51,6 @@ struct SettingsView: View {
     @State private var manualRestoreMessage: String? = nil
     @State private var manualRestoreFailed = false
 
-    // Scan all
-    @State private var isScanning = false
-    @State private var scanMessage: String? = nil
-    @State private var scanFailed = false
-
     // Admin PIN
     @State private var adminUnlocked = false
     @State private var showAdminPinPrompt = false
@@ -385,32 +380,10 @@ struct SettingsView: View {
                         }
                         .padding(.leading, 8)
                     }
-                    Button(role: .destructive) {
-                        recoverAllFromSupermemory()
-                    } label: {
-                        HStack {
-                            if isScanning {
-                                ProgressView().padding(.trailing, 6)
-                            }
-                            Label("Scan Supermemory for my data", systemImage: "magnifyingglass")
-                            Spacer()
-                        }
-                    }
-                    .disabled(isScanning)
-                    if let msg = scanMessage {
-                        HStack {
-                            Image(systemName: scanFailed ? "xmark.circle.fill" : "checkmark.circle.fill")
-                                .foregroundStyle(scanFailed ? .red : .green)
-                            Text(msg)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.leading, 4)
-                    }
                 } header: {
                     Text("Restore history")
                 } footer: {
-                    Text("Enter your recovery code or old user ID to restore check-ins from a previous install. As a last resort, tap \"Scan Supermemory\" to find all your data.")
+                    Text("Enter your recovery code or old user ID to restore check-ins from a previous install.")
                 }
 
                 // MARK: - Reset local data
@@ -641,18 +614,7 @@ struct SettingsView: View {
                 try await BackendService.restoreAccount(recoveryCode: code)
                 // Now restore entries using the restored userId
                 let restored = try await BackendService.restoreEntries()
-                let existingDays = Set(entries.map { Calendar.current.startOfDay(for: $0.date) })
-                var imported = 0
-                for item in restored {
-                    guard let date = Self.restoreDateFormatter.date(from: item.date) else { continue }
-                    let day = Calendar.current.startOfDay(for: date)
-                    guard !existingDays.contains(day) else { continue }
-                    let entry = Entry(date: day, didMove: item.didMove, activities: item.activities, note: item.note)
-                    entry.synced = true
-                    modelContext.insert(entry)
-                    imported += 1
-                }
-                try modelContext.save()
+                let imported = try Entry.importRestored(restored, existing: entries, into: modelContext)
                 await MainActor.run {
                     isRestoring = false
                     restoreMessage = imported == 0
@@ -679,19 +641,8 @@ struct SettingsView: View {
 
         Task {
             do {
-                let restored = try await BackendService.restoreEntriesForUserId(oldUserId)
-                let existingDays = Set(entries.map { Calendar.current.startOfDay(for: $0.date) })
-                var imported = 0
-                for item in restored {
-                    guard let date = Self.restoreDateFormatter.date(from: item.date) else { continue }
-                    let day = Calendar.current.startOfDay(for: date)
-                    guard !existingDays.contains(day) else { continue }
-                    let entry = Entry(date: day, didMove: item.didMove, activities: item.activities, note: item.note)
-                    entry.synced = true
-                    modelContext.insert(entry)
-                    imported += 1
-                }
-                try modelContext.save()
+                let restored = try await BackendService.restoreEntries(userId: oldUserId)
+                let imported = try Entry.importRestored(restored, existing: entries, into: modelContext)
                 await MainActor.run {
                     isManualRestoring = false
                     manualRestoreMessage = imported == 0
@@ -707,46 +658,6 @@ struct SettingsView: View {
             }
         }
     }
-
-    private func recoverAllFromSupermemory() {
-        isScanning = true
-        scanMessage = nil
-        scanFailed = false
-
-        Task {
-            let restored = await BackendService.recoverAllEntries()
-            let existingDays = Set(entries.map { Calendar.current.startOfDay(for: $0.date) })
-            var imported = 0
-            for item in restored {
-                guard let date = Self.restoreDateFormatter.date(from: item.date) else { continue }
-                let day = Calendar.current.startOfDay(for: date)
-                guard !existingDays.contains(day) else { continue }
-                let entry = Entry(date: day, didMove: item.didMove, activities: item.activities, note: item.note)
-                entry.synced = true
-                modelContext.insert(entry)
-                imported += 1
-            }
-            try? modelContext.save()
-            await MainActor.run {
-                isScanning = false
-                if imported > 0 {
-                    scanMessage = "Restored \(imported) \(imported == 1 ? "check-in" : "check-ins")."
-                } else if restored.isEmpty {
-                    scanFailed = true
-                    scanMessage = "No data found in Supermemory."
-                } else {
-                    scanMessage = "All \(restored.count) \(restored.count == 1 ? "check-in" : "check-ins") already present."
-                }
-            }
-        }
-    }
-
-    private static let restoreDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = TimeZone(secondsFromGMT: 0)
-        return f
-    }()
 }
 
 // MARK: - Edit Profile View
