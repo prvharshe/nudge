@@ -1,6 +1,4 @@
-import 'dotenv/config';
 import express from 'express';
-import cors from 'cors';
 import entriesRouter from './routes/entries.js';
 import nudgeRouter from './routes/nudge.js';
 import coachRouter from './routes/coach.js';
@@ -15,7 +13,6 @@ const app = express();
 const PORT = process.env.PORT ?? 3000;
 
 // Middleware
-app.use(cors());
 app.use(express.json());
 
 // Routes
@@ -47,6 +44,5 @@ app.listen(PORT, () => {
   console.log(`  POST /api/memories/summarize-convo — store conversation summary`);
   console.log(`  POST /api/learn     — daily educational health insight`);
   console.log(`  POST /api/reports/upload — upload & analyse health report`);
-  console.log(`  GET  /api/reports/list   — list past report uploads`);
   console.log(`  GET  /api/health    — health check`);
 });
