@@ -16,6 +16,9 @@ struct ContentView: View {
     @State private var showRestorePrompt = false
     @State private var restoreEntryCount = 0
     @State private var restoreLatestDate = ""
+    @State private var restoreCheckDone = false
+    @State private var isAutoLogging = false
+    @State private var isSyncingEntries = false
 
     // Check-in flow state
     @State private var checkInStep: CheckInStep = .prompt
@@ -102,7 +105,7 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .nudgeLaunchType)) { note in
             guard let type = note.object as? String else { return }
-            selectedTab = 0
+            selectedTab = type == "history" ? 1 : 0
             if type == "checkin" {
                 checkInStep = .prompt
             } else if type == "nudge" {
@@ -117,6 +120,8 @@ struct ContentView: View {
             Task { await UserProfile.syncToSupermemoryIfChanged() }
             // Check for recoverable history on first launch
             await checkForRecoverableHistory()
+            restoreCheckDone = true
+            await autoLogMissedDays()
             await syncUnsyncedEntries()
         }
         .onChange(of: scenePhase) { _, newPhase in
@@ -124,6 +129,10 @@ struct ContentView: View {
                 // Reset daily repeating notifications (clears stale one-shots from prior days)
                 NotificationService.scheduleAll()
                 processPendingWidgetCheckIn()
+                Task {
+                    await autoLogMissedDays()
+                    await syncUnsyncedEntries()
+                }
                 // If today is already logged, swap the evening check-in for an encouraging nudge
                 if todayEntry != nil {
                     NotificationService.updateEveningForLoggedDay()
@@ -168,6 +177,36 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Auto-log from Apple Health
+
+    /// Fills unlogged past days (not today — the user may still log it) from Health data,
+    /// then tells the user which days we logged on their behalf.
+    private func autoLogMissedDays() async {
+        // Wait for the restore check: local entries would suppress the cloud-history restore prompt.
+        guard onboardingComplete, restoreCheckDone, !showRestorePrompt, !isAutoLogging else { return }
+        isAutoLogging = true
+        defer { isAutoLogging = false }
+
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: .now)
+        let floor = UserDefaults.standard.object(forKey: "nudge.autoLogAfter") as? Date ?? .distantPast
+        var logged: [Entry] = []
+        for offset in 1...7 {
+            guard let day = cal.date(byAdding: .day, value: -offset, to: today), day > floor,
+                  let inferred = await HealthKitService.shared.inferEntry(for: day),
+                  // Re-check after the await: the user may have logged this day meanwhile.
+                  !entries.contains(where: { cal.isDate($0.date, inSameDayAs: day) })
+            else { continue }
+            let entry = Entry(date: day, didMove: inferred.didMove, activities: inferred.activities)
+            modelContext.insert(entry)
+            logged.append(entry)
+        }
+        guard !logged.isEmpty else { return }
+        try? modelContext.save()
+        NotificationService.notifyAutoLogged(days: logged.map(\.date))
+        // Upload happens in syncUnsyncedEntries(), which callers run right after this.
+    }
+
     // MARK: - Recovery check
 
     private func checkForRecoverableHistory() async {
@@ -188,6 +227,10 @@ struct ContentView: View {
 
     /// Retries entries whose earlier sync failed (offline, backend down). Marks synced only on success.
     private func syncUnsyncedEntries() async {
+        // Launch .task and foreground both call this; overlapping runs would upload the same entry twice.
+        guard !isSyncingEntries else { return }
+        isSyncingEntries = true
+        defer { isSyncingEntries = false }
         for entry in entries where !entry.synced {
             let stats = await HealthKitService.shared.fetchStats(for: entry.date)
             if (try? await BackendService.syncEntry(entry, stats: stats)) != nil {

@@ -15,11 +15,6 @@ struct CalendarView: View {
     // 7-day step chart
     @State private var weeklySteps: [(date: Date, steps: Int)] = []
 
-    // Auto-fill missed days
-    @State private var missedDays: [Date] = []
-    @State private var retroDate: Date? = nil
-    @State private var showRetroSheet = false
-
     private let insightTextKey = "nudge.weeklyInsightText"
     private let insightDateKey  = "nudge.weeklyInsightDate"
 
@@ -31,9 +26,6 @@ struct CalendarView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    if !missedDays.isEmpty {
-                        missedDaysBanner
-                    }
                     weeklyInsightCard
                     if !weeklySteps.isEmpty {
                         weeklyStepsChart
@@ -49,7 +41,6 @@ struct CalendarView: View {
             .background(AmbientBackground())
             .refreshable {
                 loadWeeklySteps()
-                loadMissedDays()
                 // Force regenerate so pull-to-refresh does not keep a stale same-week cache
                 generateInsight()
             }
@@ -61,65 +52,10 @@ struct CalendarView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showRetroSheet) {
-            if let date = retroDate {
-                retroLogSheet(for: date)
-            }
-        }
         .onAppear {
             loadOrGenerateInsight()
             loadWeeklySteps()
-            loadMissedDays()
         }
-    }
-
-    // MARK: - Missed days banner
-
-    private var missedDaysBanner: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(missedDays, id: \.self) { day in
-                HStack(spacing: 10) {
-                    Image(systemName: "figure.walk.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(Theme.green)
-
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Looks like you moved on \(day.formatted(.dateTime.weekday(.wide)))")
-                            .font(.subheadline.weight(.semibold))
-                        Text("Want to log it retroactively?")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Button("Log it") {
-                        retroDate = day
-                        showRetroSheet = true
-                    }
-                    .font(.caption.weight(.bold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Theme.green)
-                    .foregroundStyle(.white)
-                    .clipShape(Capsule())
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .surfaceCard(cornerRadius: 14)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func retroLogSheet(for date: Date) -> some View {
-        FollowUpView(didMove: true, entryDate: date, onDone: {
-            missedDays.removeAll { calendar.isDate($0, inSameDayAs: date) }
-            showRetroSheet = false
-            retroDate = nil
-        })
-        .presentationDetents([.large])
     }
 
     // MARK: - Weekly insight card
@@ -347,17 +283,6 @@ struct CalendarView: View {
         Task {
             let data = await HealthKitService.shared.fetchWeeklySteps()
             await MainActor.run { weeklySteps = data }
-        }
-    }
-
-    private func loadMissedDays() {
-        let loggedDates = Set(entries.map { calendar.startOfDay(for: $0.date) })
-        Task {
-            let missed = await HealthKitService.shared.findUnloggedMovedDays(
-                lookback: 7,
-                loggedDates: loggedDates
-            )
-            await MainActor.run { missedDays = missed }
         }
     }
 

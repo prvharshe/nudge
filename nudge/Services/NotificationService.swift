@@ -146,6 +146,21 @@ enum NotificationService {
         center.add(UNNotificationRequest(identifier: "weekly-digest", content: content, trigger: trigger))
     }
 
+    // MARK: - Auto-logged from Apple Health (immediate)
+
+    static func notifyAutoLogged(days: [Date]) {
+        guard !days.isEmpty else { return }
+        let names = days.sorted().map { $0.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)) }
+        let content = UNMutableNotificationContent()
+        content.title = "We logged \(days.count == 1 ? "a day" : "\(days.count) days") for you"
+        content.body  = "From Apple Health: \(names.joined(separator: ", ")). Tap to review or edit."
+        content.sound = .default
+        content.userInfo = ["type": "history"]
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: "auto-logged-\(UUID().uuidString)", content: content, trigger: nil)
+        )
+    }
+
     // MARK: - Swap evening notification when user has already logged today
 
     /// Call this when the user has already logged for today.

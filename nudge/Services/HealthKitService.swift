@@ -685,30 +685,33 @@ final class HealthKitService {
         }
     }
 
-    // MARK: - Unlogged moved days (for auto-fill prompt)
+    // MARK: - Auto-log inference
 
-    /// Returns dates (up to `lookback` days back) where HK shows movement but no Entry was logged.
-    func findUnloggedMovedDays(lookback: Int, loggedDates: Set<Date>) async -> [Date] {
-        guard HKHealthStore.isHealthDataAvailable() else { return [] }
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: .now)
-        var result: [Date] = []
+    /// What we'd log for a past day from Health data, or nil when Health has nothing for it
+    /// (phone locked, no permission, device not carried) — never guess "didn't move" from silence.
+    func inferEntry(for day: Date) async -> (didMove: Bool, activities: [String])? {
+        guard HKHealthStore.isHealthDataAvailable() else { return nil }
+        let start = Calendar.current.startOfDay(for: day)
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start
+        async let steps = fetchSteps(from: start, to: end)
+        async let workout = fetchBestWorkout(from: start, to: end)
+        let w = await workout
+        return Self.inferEntry(
+            steps: await steps,
+            hasWorkout: w != nil,
+            workoutTag: w.flatMap { Self.classify($0.workoutActivityType).tag },
+            stepThreshold: Int(stepThreshold)
+        )
+    }
 
-        for offset in 1...lookback {
-            guard let day = cal.date(byAdding: .day, value: -offset, to: today) else { continue }
-            guard !loggedDates.contains(day) else { continue }
-
-            let end = cal.date(byAdding: .day, value: 1, to: day) ?? day
-            async let steps = fetchSteps(from: day, to: end)
-            async let workout = fetchBestWorkout(from: day, to: end)
-
-            let s = await steps
-            let w = await workout
-            if s >= Int(stepThreshold) || w != nil {
-                result.append(day)
-            }
+    static func inferEntry(steps: Int, hasWorkout: Bool, workoutTag: String?, stepThreshold: Int) -> (didMove: Bool, activities: [String])? {
+        if hasWorkout {
+            let tag = workoutTag ?? (steps >= stepThreshold ? "walk" : nil)
+            return (true, tag.map { [$0] } ?? [])
         }
-        return result
+        if steps >= stepThreshold { return (true, ["walk"]) }
+        if steps > 0 { return (false, []) }
+        return nil
     }
 
     // MARK: - Workout type → app tag
