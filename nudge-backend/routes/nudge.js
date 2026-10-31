@@ -6,6 +6,7 @@ import { generateNudge } from '../services/groq.js';
 const router = Router();
 
 // Simple in-memory cache: one nudge per user per day
+// shortcut: unbounded per-day in-memory cache, fine for a single user; add eviction if multi-user.
 const cache = new Map(); // key: `${userId}-${YYYY-MM-DD}`, value: string
 
 function todayKey(userId, calendarDate) {

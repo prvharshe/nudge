@@ -60,8 +60,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     // 5. Fetch recent activity memories for context
     let memories = [];
     try {
-      const result = await searchMemories(userId, 8, 'movement sleep recovery activity');
-      memories = result.map(m => m.content ?? '').filter(Boolean);
+      memories = await searchMemories(userId, 8, 'movement sleep recovery activity');
     } catch { /* proceed without */ }
 
     // 6. Generate personalised insights
@@ -77,28 +76,6 @@ router.post('/upload', upload.single('file'), async (req, res) => {
   } catch (err) {
     console.error('[reports/upload]', err.message);
     res.status(500).json({ error: err.message || 'Failed to process report' });
-  }
-});
-
-/**
- * GET /api/reports/list?userId=xxx
- * Returns metadata about past uploaded reports stored in Supermemory.
- */
-router.get('/list', async (req, res) => {
-  const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: 'userId is required' });
-
-  try {
-    const results = await searchMemories(userId, 20, 'health report uploaded', 'report');
-    const reports = results.map((m, i) => ({
-      id: i,
-      summary: m.content?.slice(0, 120) ?? '',
-      date: m.createdAt ?? null,
-    }));
-    res.json({ reports });
-  } catch (err) {
-    console.error('[reports/list]', err.message);
-    res.json({ reports: [] });
   }
 });
 
