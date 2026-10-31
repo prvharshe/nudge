@@ -592,6 +592,8 @@ struct SettingsView: View {
         UserDefaults.standard.removeObject(forKey: "nudge.morningNudgeDate")
         // 3. Delete Keychain UUID (new one generated on next access)
         UserService.deleteFromKeychain()
+        // 4. Don't let Health auto-log refill the days the user just wiped
+        UserDefaults.standard.set(Calendar.current.startOfDay(for: .now), forKey: "nudge.autoLogAfter")
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             isResetting = false
