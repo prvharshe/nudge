@@ -81,6 +81,10 @@ struct ContentView: View {
             CoachView()
                 .tabItem { Label("Coach", systemImage: "brain") }
                 .tag(3)
+
+            RoutinesView()
+                .tabItem { Label("Routines", systemImage: "pills") }
+                .tag(4)
         }
         .sheet(isPresented: $showMorningNudge) {
             MorningNudgeView()
@@ -105,7 +109,7 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .nudgeLaunchType)) { note in
             guard let type = note.object as? String else { return }
-            selectedTab = type == "history" ? 1 : 0
+            selectedTab = type == "history" ? 1 : type == "routines" ? 4 : 0
             if type == "checkin" {
                 checkInStep = .prompt
             } else if type == "nudge" {

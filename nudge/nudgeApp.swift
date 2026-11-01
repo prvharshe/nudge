@@ -37,8 +37,10 @@ struct nudgeApp: App {
                 .environmentObject(sceneManager)
                 .preferredColorScheme(sceneManager.preferredScheme)
                 .onOpenURL { url in
-                    // Handle widget tap-through: nudge://open → just bring app to front
-                    _ = url
+                    // Widget tap-through: nudge://open brings the app to front; nudge://routines opens that tab.
+                    if url.host == "routines" {
+                        NotificationCenter.default.post(name: .nudgeLaunchType, object: "routines")
+                    }
                 }
         }
         .modelContainer(sharedModelContainer)
