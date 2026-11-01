@@ -35,6 +35,7 @@ enum NotificationService {
         scheduleEveningCheckIn(center: center)
         scheduleMorningNudge(center: center)
         scheduleFollowUp(center: center)
+        Task { await RoutineStore.rescheduleNotifications() }
     }
 
     // MARK: - Evening check-in (repeating daily)

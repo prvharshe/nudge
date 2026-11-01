@@ -10,5 +10,6 @@ import SwiftUI
 struct NudgeWidgetBundle: WidgetBundle {
     var body: some Widget {
         NudgeWidget()
+        RoutinesWidget()
     }
 }
