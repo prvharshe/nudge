@@ -86,7 +86,7 @@ final class HealthKitService {
     private let store = HKHealthStore()
 
     // Step threshold below which we don't count as "moved"
-    private let stepThreshold: Double = 4_000
+    let stepThreshold: Double = 4_000
 
     // Types we want to read
     private var readTypes: Set<HKObjectType> {

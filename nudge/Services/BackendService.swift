@@ -464,6 +464,25 @@ enum BackendService {
         return json.insight
     }
 
+    // MARK: - Report card email
+
+    /// Throws unless the backend accepted the email, so the caller can retry later.
+    static func sendReportEmail(_ report: ReportService.Report) async throws {
+        guard let url = URL(string: "\(baseURL)/api/report-email") else { throw URLError(.badURL) }
+
+        struct Body: Encodable { let userId: String; let report: ReportService.Report }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(Body(userId: UserService.userId, report: report))
+        request.timeoutInterval = 20
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw BackendError.serverUnavailable(status: (response as? HTTPURLResponse)?.statusCode ?? -1)
+        }
+    }
+
     // MARK: - Memory type
 
     enum MemoryType: String {
