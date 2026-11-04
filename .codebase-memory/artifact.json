@@ -1,11 +1,11 @@
 {
     "schema_version": 1,
-    "commit": "a7546ad672213f4dec98e96165bdc6b11f4d1be5",
-    "indexed_at": "2026-06-25T19:31:22Z",
+    "commit": "e5a72991676aab8be302435d5ddc702c2cb87ecf",
+    "indexed_at": "2026-10-31T20:29:41Z",
     "project": "Users-pranavharshe-Workspace-nudge",
-    "nodes": 963,
-    "edges": 2239,
-    "original_size": 3997696,
-    "compressed_size": 523954,
+    "nodes": 1370,
+    "edges": 3234,
+    "original_size": 5111808,
+    "compressed_size": 805098,
     "compression_level": 3
 }
