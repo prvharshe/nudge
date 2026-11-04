@@ -173,16 +173,20 @@ function tile(label, big, gradeLetter, line) {
 }
 
 /** Vertical bar per day. heightPx 0..BAR_H; label above, day name below. */
+// Gmail iOS dropped `background:` shorthand on divs; a bgcolor attribute + background-color on <td> is the email-safe fill.
+const block = (color, h, extra = '') =>
+  `<td height="${h}" bgcolor="${color}" style="height:${h}px;background-color:${color};font-size:0;line-height:0;${extra}">&nbsp;</td>`;
+
 const BAR_H = 96;
 function barChart(cols) {
   const cells = cols.map(c => `
     <td align="center" valign="bottom" style="padding:0 3px;">
       <div style="font:600 11px/1 ${FONT};color:${C.ink2};padding-bottom:4px;">${c.top}</div>
-      <div style="height:${BAR_H}px;line-height:0;font-size:0;" >
-        <div style="height:${BAR_H - c.h}px;"></div>
-        <div style="height:${c.h}px;background:${c.color};border-radius:4px 4px 0 0;"></div>
-      </div>
-      <div style="height:2px;background:${C.rule};"></div>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        ${c.h < BAR_H ? `<tr><td height="${BAR_H - c.h}" style="height:${BAR_H - c.h}px;font-size:0;line-height:0;">&nbsp;</td></tr>` : ''}
+        ${c.h ? `<tr>${block(c.color, c.h, 'border-radius:4px 4px 0 0;')}</tr>` : ''}
+        <tr>${block(C.rule, 2)}</tr>
+      </table>
       <div style="font:11px/1 ${FONT};color:${C.ink3};padding-top:6px;">${c.label}</div>
     </td>`).join('');
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;"><tr>${cells}</tr></table>`;
@@ -190,8 +194,8 @@ function barChart(cols) {
 
 function hbar(pct) {
   const p = Math.max(0, Math.min(100, pct ?? 0));
-  const filled = p ? `<td width="${p}%" style="background:${routineFill(pct)};height:8px;border-radius:4px;font-size:0;line-height:0;">&nbsp;</td>` : '';
-  const rest = p < 100 ? `<td style="background:${C.none};height:8px;font-size:0;line-height:0;">&nbsp;</td>` : '';
+  const filled = p ? block(routineFill(pct), 8, 'border-radius:4px;').replace('<td ', `<td width="${p}%" `) : '';
+  const rest = p < 100 ? block(C.none, 8) : '';
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-radius:4px;"><tr>${filled}${rest}</tr></table>`;
 }
 
@@ -210,7 +214,8 @@ function routineTable(routines) {
 
 function legend(items) {
   return `<div style="font:11px/1.6 ${FONT};color:${C.ink3};padding-top:10px;">` + items.map(([color, text]) =>
-    `<span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${color};vertical-align:-1px;"></span>&nbsp;${text}`
+    // A colored glyph, not a filled box: text colors survive where backgrounds get stripped.
+    `<span style="color:${color === C.none ? C.miss : color};font-size:14px;">&#9632;</span>&nbsp;${text}`
   ).join('&nbsp;&nbsp;&nbsp;') + `</div>`;
 }
 
@@ -222,15 +227,16 @@ function heatmap(weeks, fillFor, textFor) {
   const head = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d =>
     `<td align="center" style="font:600 11px ${FONT};color:${C.ink3};padding-bottom:4px;">${d}</td>`).join('');
   const rows = weeks.map(w => '<tr>' + w.map(d => {
-    if (!d) return '<td style="padding:2px;"></td>';
+    if (!d) return '<td></td>';
     const bg = fillFor(d);
     const dark = bg === C.g3;
-    return `<td style="padding:2px;"><div style="background:${bg};border-radius:6px;height:38px;text-align:center;">
+    return `<td height="38" align="center" valign="top" bgcolor="${bg}" style="height:38px;background-color:${bg};border-radius:6px;">
       <div style="font:600 11px/1 ${FONT};color:${dark ? '#FFFFFF' : C.ink};padding-top:7px;">${Number(d.date.slice(8))}</div>
-      <div style="font:10px/1 ${FONT};color:${dark ? '#FFFFFF' : C.ink2};padding-top:4px;">${textFor(d)}</div>
-    </div></td>`;
+      <div style="font:10px/1 ${FONT};color:${dark ? '#FFFFFF' : C.ink2};padding-top:4px;">${textFor(d)}&nbsp;</div>
+    </td>`;
   }).join('') + '</tr>').join('');
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;"><tr>${head}</tr>${rows}</table>`;
+  // cellspacing gives the gap between day cells now that the fill sits on the <td> itself.
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="4" style="table-layout:fixed;"><tr>${head}</tr>${rows}</table>`;
 }
 
 function weekTable(rows) {
@@ -288,9 +294,9 @@ export function renderReportEmail(report) {
 
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light"><title>${esc(title)}</title></head>
-<body style="margin:0;padding:0;background:${C.page};">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.page};"><tr><td align="center" style="padding:24px 12px;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:${C.card};border-radius:16px;">
+<body bgcolor="${C.page}" style="margin:0;padding:0;background-color:${C.page};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.page}" style="background-color:${C.page};"><tr><td align="center" style="padding:24px 12px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.card}" style="max-width:600px;background-color:${C.card};border-radius:16px;">
     <tr><td style="padding:28px 24px 0 24px;">
       <div style="font:600 12px/1 ${FONT};color:${C.g3};">NUDGE</div>
       <div style="font:700 24px/1.25 ${FONT};color:${C.ink};padding-top:8px;">${esc(title)}</div>

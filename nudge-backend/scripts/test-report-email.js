@@ -66,6 +66,7 @@ assert(mSubject.startsWith('Nudge October report card'), `month subject: ${mSubj
 const { html: wHtml, subject: wSubject } = renderReportEmail(week);
 assert(wSubject.includes('routines 86%') && wSubject.includes('steps 5/7'), `week subject: ${wSubject}`);
 assert(!/<svg|<script/i.test(wHtml + mHtml), 'email HTML has no SVG or script');
+assert(!/background:/.test(wHtml + mHtml), 'no background shorthand: Gmail iOS strips it');
 
 for (const bad of [{}, { ...week, kind: 'year' }, { ...week, days: [] }, { ...week, days: [{ date: 'x' }] },
   { ...week, days: Array(32).fill(week.days[0]) },
