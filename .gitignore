@@ -18,7 +18,8 @@ nudge-backend/node_modules/
 nudge-backend/.env
 
 # ── Claude / AI tooling ───────────────────────────────────────
-.claude/
+.claude/settings.local.json
+.claude/worktrees/
 
 # ── Local cloud tooling ────────────────────────────────────────
 .gcloud/
