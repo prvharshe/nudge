@@ -70,9 +70,11 @@ Rules:
 const COACH_MAX_TOKENS = 2048;
 
 /** Cap individual memory chunks so prompts stay bounded for users with long keeps/history. */
-function truncateChunk(text, max = 700) {
-  if (!text || text.length <= max) return text;
-  return `${text.slice(0, max).trim()}…`;
+// Single-arg on purpose: callers use .map(truncateChunk), which passes the index as a 2nd arg.
+const MAX_CHUNK = 700;
+function truncateChunk(text) {
+  if (!text || text.length <= MAX_CHUNK) return text;
+  return `${text.slice(0, MAX_CHUNK).trim()}…`;
 }
 
 async function groqChatWithRetry(params, retries = 2) {

@@ -11,6 +11,7 @@
     "test:dates": "node scripts/test-dates.js",
     "test:report": "node scripts/test-report-email.js",
     "test:restore": "node scripts/test-restore.js",
+    "test:truncate-map": "node scripts/test-truncate-map.js",
     "test:smoke": "node scripts/smoke-coach.js",
     "test:sse": "node scripts/verify-sse.js"
   },

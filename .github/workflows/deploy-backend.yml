@@ -44,6 +44,7 @@ jobs:
           npm run test:dates
           npm run test:report
           npm run test:restore
+          npm run test:truncate-map
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
