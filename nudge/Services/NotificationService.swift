@@ -35,6 +35,7 @@ enum NotificationService {
         scheduleEveningCheckIn(center: center)
         scheduleMorningNudge(center: center)
         scheduleFollowUp(center: center)
+        Task { await RoutineStore.rescheduleNotifications() }
     }
 
     // MARK: - Evening check-in (repeating daily)
@@ -144,6 +145,21 @@ enum NotificationService {
             repeats: false
         )
         center.add(UNNotificationRequest(identifier: "weekly-digest", content: content, trigger: trigger))
+    }
+
+    // MARK: - Auto-logged from Apple Health (immediate)
+
+    static func notifyAutoLogged(days: [Date]) {
+        guard !days.isEmpty else { return }
+        let names = days.sorted().map { $0.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)) }
+        let content = UNMutableNotificationContent()
+        content.title = "We logged \(days.count == 1 ? "a day" : "\(days.count) days") for you"
+        content.body  = "From Apple Health: \(names.joined(separator: ", ")). Tap to review or edit."
+        content.sound = .default
+        content.userInfo = ["type": "history"]
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: "auto-logged-\(UUID().uuidString)", content: content, trigger: nil)
+        )
     }
 
     // MARK: - Swap evening notification when user has already logged today

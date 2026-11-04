@@ -91,6 +91,7 @@ enum BackendService {
         let userId = UserService.userId
         let userName = UserDefaults.standard.string(forKey: "nudge.userName") ?? ""
         var urlString = "\(baseURL)/api/nudge?userId=\(userId)"
+        urlString += "&calendarDate=\(calendarDateString(from: Date.now))"
         if !userName.isEmpty,
            let encoded = userName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
             urlString += "&userName=\(encoded)"
@@ -463,6 +464,25 @@ enum BackendService {
         return json.insight
     }
 
+    // MARK: - Report card email
+
+    /// Throws unless the backend accepted the email, so the caller can retry later.
+    static func sendReportEmail(_ report: ReportService.Report) async throws {
+        guard let url = URL(string: "\(baseURL)/api/report-email") else { throw URLError(.badURL) }
+
+        struct Body: Encodable { let userId: String; let report: ReportService.Report }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(Body(userId: UserService.userId, report: report))
+        request.timeoutInterval = 20
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw BackendError.serverUnavailable(status: (response as? HTTPURLResponse)?.statusCode ?? -1)
+        }
+    }
+
     // MARK: - Memory type
 
     enum MemoryType: String {
@@ -697,8 +717,10 @@ enum BackendService {
     }
 
     // MARK: - Restore entries from backend
-    static func restoreEntries() async throws -> [RestoredEntry] {
-        guard let url = URL(string: "\(baseURL)/api/entries?userId=\(UserService.userId)") else {
+    /// Pass an old userId to claim data from a previous install; nil means the current user.
+    /// (Optional rather than `= UserService.userId`: default arguments are evaluated off the main actor.)
+    static func restoreEntries(userId: String? = nil) async throws -> [RestoredEntry] {
+        guard let url = URL(string: "\(baseURL)/api/entries?userId=\(userId ?? UserService.userId)") else {
             throw URLError(.badURL)
         }
         var request = URLRequest(url: url)
@@ -757,33 +779,6 @@ enum BackendService {
         let userId = try JSONDecoder().decode(AccountRestoreResponse.self, from: data).userId
         UserService.restoreAccount(userId: userId, recoveryCode: normalizedCode)
         await registerRecoveryCode()
-    }
-
-    /// Last resort: scan ALL nudge entries from Supermemory (no userId filter)
-    static func recoverAllEntries() async -> [RestoredEntry] {
-        guard let url = URL(string: "\(baseURL)/api/entries/recover-all") else { return [] }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 30
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse, http.statusCode == 200,
-              let result = try? JSONDecoder().decode(EntryRestoreResponse.self, from: data) else {
-            return []
-        }
-        return result.entries
-    }
-
-    /// Manually claim data from another userId (if the user knows their old userId)
-    static func restoreEntriesForUserId(_ oldUserId: String) async throws -> [RestoredEntry] {
-        guard let url = URL(string: "\(baseURL)/api/entries?userId=\(oldUserId)") else {
-            throw URLError(.badURL)
-        }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 30
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw URLError(.badServerResponse)
-        }
-        return try JSONDecoder().decode(EntryRestoreResponse.self, from: data).entries
     }
 }
 

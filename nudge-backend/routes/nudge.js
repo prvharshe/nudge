@@ -1,14 +1,18 @@
 import { Router } from 'express';
+import { isCalendarDate } from '../services/dates.js';
 import { searchEntries, searchMemories } from '../services/supermemory.js';
 import { generateNudge } from '../services/groq.js';
 
 const router = Router();
 
 // Simple in-memory cache: one nudge per user per day
+// shortcut: unbounded per-day in-memory cache, fine for a single user; add eviction if multi-user.
 const cache = new Map(); // key: `${userId}-${YYYY-MM-DD}`, value: string
 
-function todayKey(userId) {
-  const today = new Date().toISOString().slice(0, 10);
+function todayKey(userId, calendarDate) {
+  const today = isCalendarDate(calendarDate)
+    ? calendarDate
+    : new Date().toISOString().slice(0, 10);
   return `${userId}-${today}`;
 }
 
@@ -42,13 +46,13 @@ function buildRecoveryContext(restingHR, hrv, recoveryScore, recoveryLabel) {
 }
 
 router.get('/', async (req, res) => {
-  const { userId, refresh, userName, restingHR, hrv, recoveryScore, recoveryLabel, goal, profileSummary } = req.query;
+  const { userId, refresh, userName, restingHR, hrv, recoveryScore, recoveryLabel, goal, profileSummary, calendarDate } = req.query;
 
   if (!userId) {
     return res.status(400).json({ error: 'userId is required' });
   }
 
-  const key = todayKey(userId);
+  const key = todayKey(userId, calendarDate);
   if (cache.has(key) && refresh !== 'true') {
     return res.json({ message: cache.get(key), cached: true });
   }
@@ -64,7 +68,14 @@ router.get('/', async (req, res) => {
       ...contextMems.map(m => `[Life context] ${m.replace(/\[Life context[^\]]*\]\s*/i, '')}`),
     ];
     const recoveryContext = buildRecoveryContext(restingHR, hrv, recoveryScore, recoveryLabel);
-    const message = await generateNudge(allContext, userName || 'friend', recoveryContext, goal || null, profileSummary || null);
+    const message = await generateNudge(
+      allContext,
+      userName || 'friend',
+      recoveryContext,
+      goal || null,
+      profileSummary || null,
+      calendarDate || null
+    );
     cache.set(key, message);
     res.json({ message });
   } catch (err) {

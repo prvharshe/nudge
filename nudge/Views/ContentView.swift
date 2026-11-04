@@ -16,6 +16,9 @@ struct ContentView: View {
     @State private var showRestorePrompt = false
     @State private var restoreEntryCount = 0
     @State private var restoreLatestDate = ""
+    @State private var restoreCheckDone = false
+    @State private var isAutoLogging = false
+    @State private var isSyncingEntries = false
 
     // Check-in flow state
     @State private var checkInStep: CheckInStep = .prompt
@@ -78,6 +81,10 @@ struct ContentView: View {
             CoachView()
                 .tabItem { Label("Coach", systemImage: "brain") }
                 .tag(3)
+
+            RoutinesView()
+                .tabItem { Label("Routines", systemImage: "pills") }
+                .tag(4)
         }
         .sheet(isPresented: $showMorningNudge) {
             MorningNudgeView()
@@ -102,7 +109,7 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .nudgeLaunchType)) { note in
             guard let type = note.object as? String else { return }
-            selectedTab = 0
+            selectedTab = type == "history" ? 1 : type == "routines" ? 4 : 0
             if type == "checkin" {
                 checkInStep = .prompt
             } else if type == "nudge" {
@@ -117,12 +124,21 @@ struct ContentView: View {
             Task { await UserProfile.syncToSupermemoryIfChanged() }
             // Check for recoverable history on first launch
             await checkForRecoverableHistory()
+            restoreCheckDone = true
+            await autoLogMissedDays()
+            await syncUnsyncedEntries()
+            await ReportService.sendDueReports()
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 // Reset daily repeating notifications (clears stale one-shots from prior days)
                 NotificationService.scheduleAll()
                 processPendingWidgetCheckIn()
+                Task {
+                    await autoLogMissedDays()
+                    await syncUnsyncedEntries()
+                    await ReportService.sendDueReports()
+                }
                 // If today is already logged, swap the evening check-in for an encouraging nudge
                 if todayEntry != nil {
                     NotificationService.updateEveningForLoggedDay()
@@ -161,8 +177,40 @@ struct ContentView: View {
 
         Task {
             let stats = await HealthKitService.shared.fetchStats(for: entry.date)
-            try? await BackendService.syncEntry(entry, stats: stats)
+            if (try? await BackendService.syncEntry(entry, stats: stats)) != nil {
+                entry.synced = true
+            }
         }
+    }
+
+    // MARK: - Auto-log from Apple Health
+
+    /// Fills unlogged past days (not today — the user may still log it) from Health data,
+    /// then tells the user which days we logged on their behalf.
+    private func autoLogMissedDays() async {
+        // Wait for the restore check: local entries would suppress the cloud-history restore prompt.
+        guard onboardingComplete, restoreCheckDone, !showRestorePrompt, !isAutoLogging else { return }
+        isAutoLogging = true
+        defer { isAutoLogging = false }
+
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: .now)
+        let floor = UserDefaults.standard.object(forKey: "nudge.autoLogAfter") as? Date ?? .distantPast
+        var logged: [Entry] = []
+        for offset in 1...7 {
+            guard let day = cal.date(byAdding: .day, value: -offset, to: today), day > floor,
+                  let inferred = await HealthKitService.shared.inferEntry(for: day),
+                  // Re-check after the await: the user may have logged this day meanwhile.
+                  !entries.contains(where: { cal.isDate($0.date, inSameDayAs: day) })
+            else { continue }
+            let entry = Entry(date: day, didMove: inferred.didMove, activities: inferred.activities)
+            modelContext.insert(entry)
+            logged.append(entry)
+        }
+        guard !logged.isEmpty else { return }
+        try? modelContext.save()
+        NotificationService.notifyAutoLogged(days: logged.map(\.date))
+        // Upload happens in syncUnsyncedEntries(), which callers run right after this.
     }
 
     // MARK: - Recovery check
@@ -183,22 +231,25 @@ struct ContentView: View {
         }
     }
 
+    /// Retries entries whose earlier sync failed (offline, backend down). Marks synced only on success.
+    private func syncUnsyncedEntries() async {
+        // Launch .task and foreground both call this; overlapping runs would upload the same entry twice.
+        guard !isSyncingEntries else { return }
+        isSyncingEntries = true
+        defer { isSyncingEntries = false }
+        for entry in entries where !entry.synced {
+            let stats = await HealthKitService.shared.fetchStats(for: entry.date)
+            if (try? await BackendService.syncEntry(entry, stats: stats)) != nil {
+                entry.synced = true
+            }
+        }
+    }
+
     private func restoreHistory() {
         Task {
             do {
                 let restored = try await BackendService.restoreEntries()
-                let existingDays = Set(entries.map { Calendar.current.startOfDay(for: $0.date) })
-                var imported = 0
-                for item in restored {
-                    guard let date = Self.restoreDateFormatter.date(from: item.date) else { continue }
-                    let day = Calendar.current.startOfDay(for: date)
-                    guard !existingDays.contains(day) else { continue }
-                    let entry = Entry(date: day, didMove: item.didMove, activities: item.activities, note: item.note)
-                    entry.synced = true
-                    modelContext.insert(entry)
-                    imported += 1
-                }
-                try modelContext.save()
+                _ = try Entry.importRestored(restored, existing: entries, into: modelContext)
                 await MainActor.run {
                     markRestored()
                     showRestorePrompt = false
@@ -215,13 +266,6 @@ struct ContentView: View {
     private func markRestored() {
         UserDefaults.standard.set(true, forKey: "nudge.hasRestoredHistory")
     }
-
-    private static let restoreDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = TimeZone(secondsFromGMT: 0)
-        return f
-    }()
 
     // MARK: - Today Tab
 

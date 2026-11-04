@@ -27,9 +27,6 @@ export async function addMemory(content, userId, type = 'entry', extraTags = [],
   return res.json();
 }
 
-/** Backward compat alias */
-export const addEntry = (content, userId) => addMemory(content, userId, 'entry');
-
 /**
  * Search memories for a user.
  * @param {string}      userId  User UUID
@@ -72,32 +69,40 @@ export const searchEntries = (userId, limit = 14, query = 'movement exercise act
   searchMemories(userId, limit, query, 'entry');
 
 /**
- * Delete all Supermemory memories for a user (all types).
- * Uses two different queries to ensure all memory types are caught.
+ * List every document whose metadata.tags contains all of `tags`.
+ * Uses POST /v3/documents/list (https://supermemory.ai/docs/api-reference/documents/list-documents):
+ * its `filters` takes the same QueryFilter as /v3/search (array_contains on metadata keys), and it
+ * pages with page/limit (limit max 1100) until pagination.totalPages. Unlike /v3/search it is not
+ * capped by relevance and returns createdAt/updatedAt per document.
  */
+async function listAllDocuments(tags, includeContent = false) {
+  const docs = [];
+  for (let page = 1; ; page++) {
+    const res = await fetch(`${BASE}/documents/list`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        filters: { AND: tags.map(value => ({ filterType: 'array_contains', key: 'tags', value })) },
+        includeContent,
+        limit: 500,
+        page,
+        sort: 'createdAt',
+        order: 'desc',
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      throw new Error(`Supermemory listDocuments failed (${res.status}): ${await res.text()}`);
+    }
+    const data = await res.json();
+    docs.push(...(data.memories ?? []));
+    if (page >= (data.pagination?.totalPages ?? 0)) return docs;
+  }
+}
+
+/** Delete all Supermemory memories for a user (all types). */
 export async function deleteAllEntries(userId) {
-  const filter = { AND: [{ filterType: 'array_contains', key: 'tags', value: userId }] };
-
-  const [res1, res2] = await Promise.all([
-    fetch(`${BASE}/search`, {
-      method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({ q: 'movement exercise activity rest day', filters: filter, limit: 100 }),
-    }),
-    fetch(`${BASE}/search`, {
-      method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({ q: 'profile insight milestone coaching context convo', filters: filter, limit: 100 }),
-    }),
-  ]);
-
-  const data1 = res1.ok ? await res1.json() : { results: [] };
-  const data2 = res2.ok ? await res2.json() : { results: [] };
-
-  const seen = new Set();
-  const documentIds = [...(data1.results ?? []), ...(data2.results ?? [])]
-    .map(r => r.documentId)
-    .filter(id => id && !seen.has(id) && seen.add(id));
+  const documentIds = (await listAllDocuments([userId])).map(d => d.id).filter(Boolean);
 
   if (documentIds.length === 0) return { deleted: 0, failed: 0 };
 
@@ -121,26 +126,15 @@ export async function deleteAllEntries(userId) {
 }
 
 /**
- * Lightweight check if user has any entry memories in Supermemory.
+ * Check if user has any entry memories in Supermemory.
  * Returns { hasEntries: boolean, count: number, latestDate: string|null }
  */
 export async function checkUserHasEntries(userId) {
-  const filter = { AND: [
-    { filterType: 'array_contains', key: 'tags', value: userId },
-    { filterType: 'array_contains', key: 'tags', value: 'entry' }
-  ]};
-  const res = await fetch(`${BASE}/search`, {
-    method: 'POST',
-    headers: headers(),
-    body: JSON.stringify({ q: 'movement', filters: filter, limit: 1 }),
-  });
-  if (!res.ok) return { hasEntries: false, count: 0, latestDate: null };
-  const data = await res.json();
-  const results = data.results ?? [];
+  const entries = await restoreEntries(userId);
   return {
-    hasEntries: results.length > 0,
-    count: results.length,
-    latestDate: results[0]?.metadata?.nudgeEntry?.date ?? null
+    hasEntries: entries.length > 0,
+    count: entries.length,
+    latestDate: entries.at(-1)?.date ?? null,
   };
 }
 
@@ -161,47 +155,18 @@ function legacyDateKey(value) {
   return `${match[3]}-${String(month).padStart(2, '0')}-${match[2].padStart(2, '0')}`;
 }
 
-/**
- * Scan ALL nudge-tagged documents from Supermemory (no userId filter).
- * Returns every entry-type document. Use as a last-resort recovery.
- */
-export async function scanAllEntries() {
-  const records = await searchRawMemories([
-    { filterType: 'array_contains', key: 'tags', value: 'nudge' },
-    { filterType: 'array_contains', key: 'tags', value: 'entry' },
-  ], 'movement check-in activity note steps workout', 100);
-
-  const seen = new Set();
-  return records.map(record => {
-    const content = record.chunks?.[0]?.content ?? record.content ?? '';
-    const snapshot = record.metadata?.nudgeEntry;
-    if (snapshot?.date && typeof snapshot.didMove === 'boolean') return snapshot;
-
-    const match = content.match(/^On (.+?), the user (did move|did not move)\.\s*(?:Activities: (.*?)\.\s*)?(?:Note: "(.*?)"\.)?/);
-    if (!match) return null;
-    const date = legacyDateKey(match[1]);
-    if (!date) return null;
-    return {
-      date,
-      didMove: match[2] === 'did move',
-      activities: match[3] ? match[3].split(', ').filter(Boolean) : [],
-      note: match[4] || null,
-    };
-  }).filter(entry => {
-    if (!entry || seen.has(entry.date)) return false;
-    seen.add(entry.date);
-    return true;
-  }).sort((a, b) => a.date.localeCompare(b.date));
+export async function restoreEntries(userId) {
+  return recordsToEntries(await listAllDocuments([userId, 'entry'], true));
 }
 
-export async function restoreEntries(userId) {
-  const records = await searchRawMemories([
-    { filterType: 'array_contains', key: 'tags', value: userId },
-    { filterType: 'array_contains', key: 'tags', value: 'entry' },
-  ], 'movement check-in activity note steps workout', 100);
-
+/**
+ * Maps Supermemory entry documents to { date, didMove, activities, note }, one per date, oldest→newest.
+ * Editing a day posts a new document, so the newest copy (by createdAt) of each date wins.
+ */
+export function recordsToEntries(records) {
   const seen = new Set();
-  return records.map(record => {
+  const newestFirst = [...records].sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+  return newestFirst.map(record => {
     const content = record.chunks?.[0]?.content ?? record.content ?? '';
     const snapshot = record.metadata?.nudgeEntry;
     if (snapshot?.date && typeof snapshot.didMove === 'boolean') return snapshot;

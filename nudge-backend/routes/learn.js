@@ -4,6 +4,7 @@ import { generateLearnInsight } from '../services/groq.js';
 const router = Router();
 
 // Per-user per-day cache
+// shortcut: unbounded per-day in-memory cache, fine for a single user; add eviction if multi-user.
 const cache = new Map(); // key: `${userId}-${YYYY-MM-DD}`
 
 function todayKey(userId) {

@@ -57,6 +57,7 @@
 		0D5B9E782F5F09020065AB64 /* Exceptions for "nudge" folder in "NudgeWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Shared/RoutineStore.swift,
 				Shared/SharedStore.swift,
 			);
 			target = 0D5B9E5C2F5F07480065AB64 /* NudgeWidgetExtension */;

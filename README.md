@@ -34,7 +34,7 @@ nudge-backend/          Node.js + Express API
 ```bash
 cd nudge-backend
 npm install
-npm run dev          # starts on http://localhost:3000 (node --watch)
+npm run dev          # starts on http://localhost:3000 (node --watch, loads .env if present; Node >= 22.9)
 ```
 
 Create `nudge-backend/.env` with:
@@ -73,7 +73,7 @@ All routes are mounted under `/api` and keyed by a per-install user UUID:
 | `POST /api/weekly` | Weekly digest |
 | `POST /api/memories` | Search stored memories (`/summarize-convo` condenses coach chats) |
 | `POST /api/learn` | Teach the coach a fact about you |
-| `POST /api/reports/upload` · `GET /api/reports/list` | Upload & parse health report PDFs |
+| `POST /api/reports/upload` | Upload & parse health report PDFs |
 | `POST /api/recovery/register` · `/restore` | Back up / restore the user ID across reinstalls |
 
 ## Notes
