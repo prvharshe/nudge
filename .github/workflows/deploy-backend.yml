@@ -42,6 +42,7 @@ jobs:
           npm ci
           npm test
           npm run test:dates
+          npm run test:report
           npm run test:restore
 
       - name: Authenticate to Google Cloud
@@ -78,7 +79,7 @@ jobs:
 
           # Prefer GitHub secrets when both are set; otherwise keep existing Cloud Run env.
           if [[ -n "${SUPERMEMORY_API_KEY:-}" && -n "${GROQ_API_KEY:-}" ]]; then
-            DEPLOY_ARGS+=(--set-env-vars "SUPERMEMORY_API_KEY=${SUPERMEMORY_API_KEY},GROQ_API_KEY=${GROQ_API_KEY},NODE_ENV=production")
+            DEPLOY_ARGS+=(--update-env-vars "SUPERMEMORY_API_KEY=${SUPERMEMORY_API_KEY},GROQ_API_KEY=${GROQ_API_KEY},NODE_ENV=production")
           else
             echo "API key secrets not both set — deploying code only and preserving existing Cloud Run env vars."
             DEPLOY_ARGS+=(--update-env-vars "NODE_ENV=production")

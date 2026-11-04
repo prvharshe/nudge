@@ -32,7 +32,7 @@ DEPLOY_ARGS=(
 )
 
 if [[ -n "${SUPERMEMORY_API_KEY}" && -n "${GROQ_API_KEY}" ]]; then
-  DEPLOY_ARGS+=(--set-env-vars "SUPERMEMORY_API_KEY=${SUPERMEMORY_API_KEY},GROQ_API_KEY=${GROQ_API_KEY},NODE_ENV=production")
+  DEPLOY_ARGS+=(--update-env-vars "SUPERMEMORY_API_KEY=${SUPERMEMORY_API_KEY},GROQ_API_KEY=${GROQ_API_KEY},NODE_ENV=production")
 else
   echo "API keys not set — preserving existing Cloud Run env vars."
   DEPLOY_ARGS+=(--update-env-vars "NODE_ENV=production")

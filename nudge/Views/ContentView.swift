@@ -127,6 +127,7 @@ struct ContentView: View {
             restoreCheckDone = true
             await autoLogMissedDays()
             await syncUnsyncedEntries()
+            await ReportService.sendDueReports()
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
@@ -136,6 +137,7 @@ struct ContentView: View {
                 Task {
                     await autoLogMissedDays()
                     await syncUnsyncedEntries()
+                    await ReportService.sendDueReports()
                 }
                 // If today is already logged, swap the evening check-in for an encouraging nudge
                 if todayEntry != nil {

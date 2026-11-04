@@ -90,11 +90,15 @@ enum RoutineStore {
         var ids = Set(map[key] ?? [])
         if done { ids.insert(id.uuidString) } else { ids.remove(id.uuidString) }
         map[key] = Array(ids)
-        let cutoff = dayKey(Calendar.current.date(byAdding: .day, value: -14, to: date)!)
+        // ~13 months, so weekly/monthly report cards (ReportService) have history to read.
+        let cutoff = dayKey(Calendar.current.date(byAdding: .day, value: -400, to: date)!)
         map = map.filter { $0.key >= cutoff }   // zero-padded keys sort chronologically
         doneMap = map
         changed()
     }
+
+    /// Earliest day with any tick; days before it count as "not tracked yet", not missed.
+    static var firstTrackedDayKey: String? { doneMap.filter { !$0.value.isEmpty }.keys.min() }
 
     /// Today's routines not yet ticked, in time order. This is what the widget shows.
     static func pending(on date: Date) -> [Routine] {
