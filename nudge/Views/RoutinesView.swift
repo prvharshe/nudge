@@ -91,6 +91,10 @@ struct RoutinesView: View {
                     refresh += 1
                 }
             }
+            // A notification's Done button can tick a routine while this screen is open.
+            .onReceive(NotificationCenter.default.publisher(for: .nudgeRoutinesChanged)) { _ in
+                refresh += 1
+            }
         }
     }
 

@@ -19,7 +19,7 @@ enum NotificationService {
 
     static func setEvening(_ minutes: Int)  { UserDefaults.standard.set(minutes, forKey: eveningKey);  scheduleAll() }
     static func setMorning(_ minutes: Int)  { UserDefaults.standard.set(minutes, forKey: morningKey);  scheduleAll() }
-    static func setFollowUp(_ minutes: Int) { UserDefaults.standard.set(minutes, forKey: followUpKey); scheduleFollowUp() }
+    static func setFollowUp(_ minutes: Int) { UserDefaults.standard.set(minutes, forKey: followUpKey); scheduleAll() }
 
     // MARK: - Permission
 
@@ -27,31 +27,102 @@ enum NotificationService {
         _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
     }
 
-    // MARK: - Schedule all repeating notifications
+    // MARK: - Notification buttons
+
+    static func registerCategories() {
+        // No .foreground option: the buttons do their work without opening the app.
+        let routine = UNNotificationCategory(
+            identifier: NotificationActions.routineCategory,
+            actions: [
+                UNNotificationAction(identifier: NotificationActions.routineDone, title: "Done"),
+                UNNotificationAction(identifier: NotificationActions.routineSnooze, title: "Snooze \(NotificationActions.snoozeMinutes) min"),
+            ],
+            intentIdentifiers: []
+        )
+        let checkIn = UNNotificationCategory(
+            identifier: NotificationActions.checkInCategory,
+            actions: [
+                UNNotificationAction(identifier: NotificationActions.checkInYes, title: "Yes, I moved"),
+                UNNotificationAction(identifier: NotificationActions.checkInNo, title: "Not today"),
+            ],
+            intentIdentifiers: []
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([routine, checkIn])
+    }
+
+    /// Ticks the routines a notification was about, on the day it was for, and clears that slot's alerts.
+    static func completeRoutines(userInfo: [AnyHashable: Any]) async {
+        guard let target = RoutineStore.routineTarget(from: userInfo) else { return }
+        for id in target.ids {
+            RoutineStore.setDone(id, true, on: target.day)
+        }
+        if let slot = userInfo["slot"] as? String {
+            UNUserNotificationCenter.current().removeDeliveredNotifications(
+                withIdentifiers: [slot, slot + "-f", RoutineStore.snoozePrefix + slot]
+            )
+        }
+        // Awaited so iOS doesn't suspend the app before the slot's follow-up is removed.
+        await RoutineStore.rescheduleNotifications()
+    }
+
+    static func snoozeRoutines(content: UNNotificationContent) async {
+        guard let slot = content.userInfo["slot"] as? String,
+              let copy = content.mutableCopy() as? UNMutableNotificationContent else { return }
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: TimeInterval(NotificationActions.snoozeMinutes * 60),
+            repeats: false
+        )
+        // One snooze per slot: snoozing again replaces the earlier one.
+        try? await UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: RoutineStore.snoozePrefix + slot, content: copy, trigger: trigger)
+        )
+    }
+
+    // MARK: - Schedule all
 
     static func scheduleAll() {
         let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: ["evening-checkin", "morning-nudge", "evening-logged"])
-        scheduleEveningCheckIn(center: center)
+        // The first and last two are ids from before dated check-in reminders; removing them stops duplicates after an update.
+        center.removePendingNotificationRequests(withIdentifiers: ["evening-checkin", "morning-nudge", "evening-logged", "follow-up-reminder"])
         scheduleMorningNudge(center: center)
-        scheduleFollowUp(center: center)
-        Task { await RoutineStore.rescheduleNotifications() }
+        Task {
+            await rescheduleCheckIns()
+            await RoutineStore.rescheduleNotifications()
+        }
     }
 
-    // MARK: - Evening check-in (repeating daily)
+    // MARK: - Evening check-in and follow-up (dated one-shots)
 
-    private static func scheduleEveningCheckIn(center: UNUserNotificationCenter) {
-        let content = UNMutableNotificationContent()
-        content.title = "How did today go?"
-        content.body  = "Take 10 seconds to log your movement."
-        content.sound = .default
-        content.userInfo = ["type": "checkin"]
+    /// Skips today once it's logged (SharedStore.todayCheckIn is set by the app, widget and notification buttons).
+    static func rescheduleCheckIns(now: Date = .now) async {
+        let center = UNUserNotificationCenter.current()
+        let planned = CheckInReminders.plan(
+            eveningMinutes: eveningMinutes,
+            followUpMinutes: followUpMinutes,
+            loggedToday: SharedStore.todayCheckIn != nil,
+            from: now
+        )
+        let plannedIds = Set(planned.map(\.id))
+        let stale = await center.pendingNotificationRequests().map(\.identifier)
+            .filter { $0.hasPrefix(CheckInReminders.prefix) && !plannedIds.contains($0) }
+        center.removePendingNotificationRequests(withIdentifiers: stale)
 
-        var components = DateComponents()
-        components.hour   = eveningMinutes / 60
-        components.minute = eveningMinutes % 60
-        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
-        center.add(UNNotificationRequest(identifier: "evening-checkin", content: content, trigger: trigger))
+        for item in planned {
+            let content = UNMutableNotificationContent()
+            content.title = item.isFollowUp ? "Still time to log today 🌙" : "How did today go?"
+            content.body  = item.isFollowUp ? "A quick tap before bed keeps your history complete." : "Take 10 seconds to log your movement."
+            content.sound = .default
+            content.categoryIdentifier = NotificationActions.checkInCategory
+            content.userInfo = ["type": "checkin", "day": item.dayKey]
+            let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: item.fireDate)
+            let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+            try? await center.add(UNNotificationRequest(identifier: item.id, content: content, trigger: trigger))
+        }
+
+        // A log can land during the awaits above: a notification button cold-launches the app, which also reschedules.
+        if SharedStore.todayCheckIn != nil {
+            CheckInReminders.cancel(on: now)
+        }
     }
 
     // MARK: - Morning nudge (repeating daily)
@@ -68,40 +139,6 @@ enum NotificationService {
         components.minute = morningMinutes % 60
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
         center.add(UNNotificationRequest(identifier: "morning-nudge", content: content, trigger: trigger))
-    }
-
-    // MARK: - Follow-up reminder (one-shot, tonight only)
-    // Fires once if the user hasn't logged by the follow-up time.
-    // Cancelled by FollowUpView when an entry is saved.
-    // Re-scheduled each day on app launch via scheduleAll().
-
-    static func scheduleFollowUp(center: UNUserNotificationCenter = UNUserNotificationCenter.current()) {
-        center.removePendingNotificationRequests(withIdentifiers: ["follow-up-reminder"])
-
-        // Don't fire if the time has already passed today
-        let cal = Calendar.current
-        var comps = cal.dateComponents([.year, .month, .day], from: Date.now)
-        comps.hour   = followUpMinutes / 60
-        comps.minute = followUpMinutes % 60
-        comps.second = 0
-        guard let fireDate = cal.date(from: comps), fireDate > Date.now else { return }
-
-        let content = UNMutableNotificationContent()
-        content.title = "Still time to log today 🌙"
-        content.body  = "A quick tap before bed keeps your history complete."
-        content.sound = .default
-        content.userInfo = ["type": "checkin"]
-
-        let trigger = UNTimeIntervalNotificationTrigger(
-            timeInterval: fireDate.timeIntervalSinceNow,
-            repeats: false
-        )
-        center.add(UNNotificationRequest(identifier: "follow-up-reminder", content: content, trigger: trigger))
-    }
-
-    static func cancelFollowUp() {
-        UNUserNotificationCenter.current()
-            .removePendingNotificationRequests(withIdentifiers: ["follow-up-reminder"])
     }
 
     // MARK: - Weekly digest (one-shot, re-scheduled each app launch with fresh data)
@@ -160,36 +197,5 @@ enum NotificationService {
         UNUserNotificationCenter.current().add(
             UNNotificationRequest(identifier: "auto-logged-\(UUID().uuidString)", content: content, trigger: nil)
         )
-    }
-
-    // MARK: - Swap evening notification when user has already logged today
-
-    /// Call this when the user has already logged for today.
-    /// Replaces the generic "log your movement" notification with an
-    /// encouraging one that points to the coach / morning nudge instead.
-    static func updateEveningForLoggedDay() {
-        let center = UNUserNotificationCenter.current()
-        // Remove the "please log" notification and follow-up
-        center.removePendingNotificationRequests(withIdentifiers: ["evening-checkin", "follow-up-reminder"])
-
-        // Schedule a one-shot replacement for tonight's slot (if it hasn't passed)
-        let cal = Calendar.current
-        var comps = cal.dateComponents([.year, .month, .day], from: Date.now)
-        comps.hour   = eveningMinutes / 60
-        comps.minute = eveningMinutes % 60
-        comps.second = 0
-        guard let fireDate = cal.date(from: comps), fireDate > Date.now else { return }
-
-        let content = UNMutableNotificationContent()
-        content.title = "Great work today 💪"
-        content.body  = "Check what your coach has to say."
-        content.sound = .default
-        content.userInfo = ["type": "nudge"]   // opens the morning nudge sheet
-
-        let trigger = UNTimeIntervalNotificationTrigger(
-            timeInterval: fireDate.timeIntervalSinceNow,
-            repeats: false
-        )
-        center.add(UNNotificationRequest(identifier: "evening-logged", content: content, trigger: trigger))
     }
 }
