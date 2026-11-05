@@ -126,22 +126,24 @@ struct ContentView: View {
             await checkForRecoverableHistory()
             restoreCheckDone = true
             await autoLogMissedDays()
+            // A notification button can launch the app while the phone is locked, when Health is unreadable:
+            // an upload would lose its stats and a report would read as "no data". The next foreground runs both.
+            guard UIApplication.shared.isProtectedDataAvailable else { return }
             await syncUnsyncedEntries()
             await ReportService.sendDueReports()
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
-                // Reset daily repeating notifications (clears stale one-shots from prior days)
-                NotificationService.scheduleAll()
                 processPendingWidgetCheckIn()
+                // Reminders skip today based on this; covers entries that didn't come through a check-in, like a restore.
+                if let entry = todayEntry {
+                    SharedStore.todayCheckIn = CheckInRecord(didMove: entry.didMove, date: entry.date)
+                }
+                NotificationService.scheduleAll()
                 Task {
                     await autoLogMissedDays()
                     await syncUnsyncedEntries()
                     await ReportService.sendDueReports()
-                }
-                // If today is already logged, swap the evening check-in for an encouraging nudge
-                if todayEntry != nil {
-                    NotificationService.updateEveningForLoggedDay()
                 }
                 // Weekly digest — re-schedule each foreground with fresh moved-day count
                 let cal = Calendar.current
@@ -171,7 +173,7 @@ struct ContentView: View {
         )
         modelContext.insert(entry)
         SharedStore.clearPendingCheckIn()
-        NotificationService.cancelFollowUp()
+        CheckInReminders.cancel(on: entry.date)
         // todayCheckIn already written by the intent — widget is already showing result
         WidgetCenter.shared.reloadAllTimelines()
 
@@ -679,6 +681,7 @@ extension View {
 
 extension Notification.Name {
     static let nudgeLaunchType = Notification.Name("nudgeLaunchType")
+    static let nudgeRoutinesChanged = Notification.Name("nudgeRoutinesChanged")
 }
 
 #Preview {

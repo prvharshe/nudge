@@ -1,5 +1,5 @@
 // Self-check for RoutineStore.plan (no XCTest target in this repo). Run from repo root:
-// xcrun swiftc -o /tmp/rpc nudge/Shared/SharedStore.swift nudge/Shared/RoutineStore.swift scripts/routine-plan-check/main.swift && /tmp/rpc
+// xcrun swiftc -o /tmp/rpc nudge/Shared/SharedStore.swift nudge/Shared/RoutineStore.swift nudge/Shared/CheckInReminders.swift scripts/routine-plan-check/main.swift && /tmp/rpc
 import Foundation
 var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "Asia/Kolkata")!
 func d(_ s: String) -> Date { let f = DateFormatter(); f.calendar = cal; f.timeZone = cal.timeZone; f.dateFormat = "yyyy-MM-dd HH:mm"; return f.date(from: s)! }
@@ -39,4 +39,27 @@ assert(f2.string(from: dp[0].fireDate) == "2026-11-01 10:00", "DST fire")
 // Full week of due reminders must survive the cap (follow-ups only near-term)
 let week = RoutineStore.plan(routines: r, isDone: { _, _ in false }, from: mon, calendar: cal)
 assert(week.filter { !$0.id.hasSuffix("-f") }.count == 7 * 2 + 2, "week due count \(week.filter { !$0.id.hasSuffix("-f") }.count)")
+// Notification buttons: a slot carries its open routines and the day it belongs to.
+let slotPlan = RoutineStore.plan(routines: r, isDone: { id, _ in id == ras }, from: mon, days: 1, calendar: cal)
+assert(slotPlan[0].routineIds == [r[1].id], "only the open routine: \(slotPlan[0].routineIds)")
+assert(slotPlan[1].slot == slotPlan[0].id && slotPlan[1].id == slotPlan[0].id + "-f", "follow-up shares the slot")
+// The 23:30 lotion follow-up fires after midnight but still belongs to Monday.
+let lotionFollowUp = RoutineStore.plan(routines: r, isDone: { _, _ in false }, from: mon, days: 1, calendar: cal).last!
+assert(lotionFollowUp.fireDate == d("2026-11-03 00:00") && RoutineStore.dayKey(lotionFollowUp.day, calendar: cal) == "2026-11-02", "follow-up day")
+
+// userInfo round trip, including the day surviving past midnight.
+let info = RoutineStore.userInfo(for: lotionFollowUp, calendar: cal)
+let target = RoutineStore.routineTarget(from: info, calendar: cal)!
+assert(target.ids == lotionFollowUp.routineIds, "ids round trip")
+assert(RoutineStore.dayKey(target.day, calendar: cal) == "2026-11-02", "day round trip")
+assert(RoutineStore.routineTarget(from: ["type": "routines"], calendar: cal) == nil, "old notifications have no target")
+assert(RoutineStore.date(forDayKey: "nonsense", calendar: cal) == nil, "bad day key")
+assert(RoutineStore.date(forDayKey: "2026-13-45", calendar: cal) == nil, "impossible day key")
+
+// A snooze goes stale only once every routine in it is done.
+let snoozeInfo = RoutineStore.userInfo(for: RoutineStore.plan(routines: r, isDone: { _, _ in false }, from: mon, days: 1, calendar: cal)[0], calendar: cal)
+assert(!RoutineStore.snoozeIsStale(snoozeInfo, calendar: cal, isDone: { _, _ in false }), "nothing done")
+assert(!RoutineStore.snoozeIsStale(snoozeInfo, calendar: cal, isDone: { id, _ in id == ras }), "partly done")
+assert(RoutineStore.snoozeIsStale(snoozeInfo, calendar: cal, isDone: { _, _ in true }), "all done")
+assert(!RoutineStore.snoozeIsStale(["type": "routines"], calendar: cal, isDone: { _, _ in true }), "unreadable snooze keeps firing")
 print("routine plan tests passed")
