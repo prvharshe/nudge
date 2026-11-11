@@ -10,6 +10,7 @@ struct CheckInYesIntent: AppIntent {
     func perform() async throws -> some IntentResult {
         SharedStore.todayCheckIn   = CheckInRecord(didMove: true,  date: .now)
         SharedStore.pendingCheckIn = CheckInRecord(didMove: true,  date: .now)
+        CheckInReminders.cancel(on: .now)
         WidgetCenter.shared.reloadAllTimelines()
         return .result()
     }
@@ -24,6 +25,7 @@ struct CheckInNoIntent: AppIntent {
     func perform() async throws -> some IntentResult {
         SharedStore.todayCheckIn   = CheckInRecord(didMove: false, date: .now)
         SharedStore.pendingCheckIn = CheckInRecord(didMove: false, date: .now)
+        CheckInReminders.cancel(on: .now)
         WidgetCenter.shared.reloadAllTimelines()
         return .result()
     }

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import WidgetKit
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
@@ -567,6 +568,11 @@ struct SettingsView: View {
         UserService.deleteFromKeychain()
         // 4. Don't let Health auto-log refill the days the user just wiped
         UserDefaults.standard.set(Calendar.current.startOfDay(for: .now), forKey: "nudge.autoLogAfter")
+        // 5. Today is no longer logged, so tonight's reminders should come back
+        SharedStore.todayCheckIn = nil
+        SharedStore.clearPendingCheckIn()
+        WidgetCenter.shared.reloadAllTimelines()
+        NotificationService.scheduleAll()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             isResetting = false

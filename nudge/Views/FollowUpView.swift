@@ -201,8 +201,8 @@ struct FollowUpView: View {
         SharedStore.clearPendingCheckIn()
         WidgetCenter.shared.reloadAllTimelines()
 
-        // Cancel tonight's follow-up reminder — user already logged
-        NotificationService.cancelFollowUp()
+        // Silence tonight's remaining reminders — user already logged
+        CheckInReminders.cancel(on: entry.date)
 
         // Show reaction overlay — onDone() is called by its dismiss handler
         showReaction = true

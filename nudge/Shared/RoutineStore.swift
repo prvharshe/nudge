@@ -26,6 +26,9 @@ struct RoutineNotificationPlan: Equatable {
     let fireDate: Date
     let title: String
     let body: String
+    let routineIds: [UUID]
+    let day: Date         // the day the routines are due; a follow-up can fire after midnight
+    let slot: String      // id shared by a slot's reminder and its follow-up
 }
 
 enum RoutineStore {
@@ -35,6 +38,7 @@ enum RoutineStore {
     private static let routinesKey = "routines.list"
     private static let doneKey = "routines.done"   // [dayKey: [routine UUID string]]
     static let notificationPrefix = "routine-"
+    static let snoozePrefix = "snooze-"
 
     // Fixed IDs: the app and widget processes must agree on the seed's IDs before it is ever saved.
     static let defaultRoutines: [Routine] = [
@@ -73,6 +77,14 @@ enum RoutineStore {
     static func dayKey(_ date: Date, calendar: Calendar = .current) -> String {
         let c = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!)
+    }
+
+    static func date(forDayKey key: String, calendar: Calendar = .current) -> Date? {
+        let parts = key.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        let components = DateComponents(year: parts[0], month: parts[1], day: parts[2])
+        guard components.isValidDate(in: calendar) else { return nil }
+        return calendar.date(from: components)
     }
 
     private static var doneMap: [String: [String]] {
@@ -136,13 +148,16 @@ enum RoutineStore {
                 let names = open.map(\.name).joined(separator: " + ")
                 let body = open.map { $0.detail.isEmpty ? $0.name : "\($0.name): \($0.detail)" }.joined(separator: "\n")
                 let slotId = "\(notificationPrefix)\(dayKey(day, calendar: calendar))-\(minutes)"
+                let ids = open.map(\.id)
                 if fire > now {
-                    result.append(.init(id: slotId, fireDate: fire, title: "Time for \(names)", body: body))
+                    result.append(.init(id: slotId, fireDate: fire, title: "Time for \(names)", body: body,
+                                        routineIds: ids, day: day, slot: slotId))
                 }
                 let followUp = fire.addingTimeInterval(30 * 60)
                 if offset < followUpDays, followUp > now {
                     result.append(.init(id: slotId + "-f", fireDate: followUp, title: "Still pending: \(names)",
-                                        body: "Tick it off in Nudge once it's done."))
+                                        body: "Tick it off in Nudge once it's done.",
+                                        routineIds: ids, day: day, slot: slotId))
                 }
             }
         }
@@ -155,20 +170,56 @@ enum RoutineStore {
     static func rescheduleNotifications(now: Date = .now) async {
         let planned = plan(routines: routines, isDone: { isDone($0, on: $1) }, from: now)
         let center = UNUserNotificationCenter.current()
-        let plannedIds = Set(planned.map(\.id))
-        let stale = await center.pendingNotificationRequests().map(\.identifier)
-            .filter { $0.hasPrefix(notificationPrefix) && !plannedIds.contains($0) }
-        center.removePendingNotificationRequests(withIdentifiers: stale)
+        await removeStaleNotifications(keeping: Set(planned.map(\.id)))
         for item in planned {
             let content = UNMutableNotificationContent()
             content.title = item.title
             content.body = item.body
             content.sound = .default
-            content.userInfo = ["type": "routines"]
+            content.categoryIdentifier = NotificationActions.routineCategory
+            content.userInfo = userInfo(for: item)
             let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: item.fireDate)
             let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
             // Same identifier replaces the existing request, so re-adding is idempotent.
             try? await center.add(UNNotificationRequest(identifier: item.id, content: content, trigger: trigger))
         }
+        // A tick can land during the awaits above: a Done button cold-launches the app, which also reschedules.
+        let current = plan(routines: routines, isDone: { isDone($0, on: $1) }, from: now)
+        await removeStaleNotifications(keeping: Set(current.map(\.id)))
+    }
+
+    private static func removeStaleNotifications(keeping ids: Set<String>) async {
+        let center = UNUserNotificationCenter.current()
+        let stale = await center.pendingNotificationRequests().filter { request in
+            if request.identifier.hasPrefix(notificationPrefix) { return !ids.contains(request.identifier) }
+            return request.identifier.hasPrefix(snoozePrefix)
+                && snoozeIsStale(request.content.userInfo, isDone: { isDone($0, on: $1) })
+        }
+        center.removePendingNotificationRequests(withIdentifiers: stale.map(\.identifier))
+    }
+
+    // MARK: - Notification payload
+
+    static func userInfo(for item: RoutineNotificationPlan, calendar: Calendar = .current) -> [String: Any] {
+        ["type": "routines",
+         "routineIds": item.routineIds.map(\.uuidString),
+         "day": dayKey(item.day, calendar: calendar),
+         "slot": item.slot]
+    }
+
+    static func routineTarget(from userInfo: [AnyHashable: Any], calendar: Calendar = .current) -> (ids: [UUID], day: Date)? {
+        guard let raw = userInfo["routineIds"] as? [String],
+              let key = userInfo["day"] as? String,
+              let day = date(forDayKey: key, calendar: calendar) else { return nil }
+        return (raw.compactMap(UUID.init(uuidString:)), day)
+    }
+
+    static func snoozeIsStale(
+        _ userInfo: [AnyHashable: Any],
+        calendar: Calendar = .current,
+        isDone: (UUID, Date) -> Bool
+    ) -> Bool {
+        guard let target = routineTarget(from: userInfo, calendar: calendar) else { return false }
+        return target.ids.allSatisfy { isDone($0, target.day) }
     }
 }
